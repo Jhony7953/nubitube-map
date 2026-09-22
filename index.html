@@ -279,32 +279,135 @@ svg{
 @media(max-width:760px){
 
   #app{
-    padding:12px;
+    padding:10px;
+  }
+
+  .header{
+    margin-bottom:12px;
   }
 
   .header h1{
-    font-size:25px;
+    font-size:24px;
+    margin-bottom:5px;
+  }
+
+  .header p{
+    font-size:13px;
+    line-height:1.35;
+    padding:0 6px;
+  }
+
+  .search{
+    margin-bottom:9px;
+    padding:13px 14px;
+    border-radius:10px;
+    font-size:16px;
+  }
+
+  .navbar{
+    min-height:0;
+    margin:0 0 9px 1px;
+    gap:6px;
+    align-items:flex-start;
+    flex-direction:column;
+  }
+
+  .back{
+    min-height:40px;
+    padding:9px 12px;
+    font-size:13px;
+  }
+
+  .breadcrumb{
+    width:100%;
+    gap:5px;
+    font-size:12px;
+    line-height:1.45;
+  }
+
+  .crumb-btn{
+    min-height:30px;
   }
 
   .layout{
     grid-template-columns:1fr;
+    gap:10px;
   }
 
   .mapbox{
-    min-height:500px;
+    min-height:430px;
+    border-radius:14px;
   }
 
   svg{
-    height:500px;
+    height:430px;
   }
 
   .panel{
-    min-height:170px;
+    min-height:0;
+    padding:17px;
+    border-radius:14px;
   }
 
-  .navbar{
-    align-items:flex-start;
-    flex-direction:column;
+  .panel h2{
+    font-size:22px;
+    margin-bottom:8px;
+  }
+
+  .panel p{
+    font-size:14px;
+    line-height:1.45;
+  }
+
+  .context{
+    margin-top:13px !important;
+  }
+
+  .tag{
+    margin-top:13px;
+  }
+
+  .locality-list{
+    margin-top:14px;
+    padding-top:12px;
+  }
+
+  .locality-item{
+    min-height:44px;
+    margin-bottom:7px;
+    padding:11px 12px;
+    font-size:14px;
+  }
+}
+
+@media(max-width:420px){
+
+  #app{
+    padding:8px;
+  }
+
+  .header h1{
+    font-size:22px;
+  }
+
+  .header p{
+    font-size:12px;
+  }
+
+  .mapbox{
+    min-height:390px;
+  }
+
+  svg{
+    height:390px;
+  }
+
+  .panel{
+    padding:15px;
+  }
+
+  .panel h2{
+    font-size:20px;
   }
 }
 </style>
@@ -323,7 +426,7 @@ svg{
     id="search"
     class="search"
     type="search"
-    placeholder="🔎 Buscar provincia..."
+    placeholder="🔎 Buscar Radio, TV o Lugar..."
     autocomplete="off">
 
   <div class="navbar">
@@ -1082,7 +1185,7 @@ function showArgentina(){
   search.value="";
 
   search.placeholder=
-    "🔎 Buscar provincia...";
+    "🔎 Buscar Radio, TV o Lugar...";
 
 
   localityList.innerHTML="";
@@ -1172,7 +1275,7 @@ function showProvince(
   search.value="";
 
   search.placeholder=
-    "🔎 Buscar departamento...";
+    "🔎 Buscar Radio, TV o Lugar...";
 
 
   localityList.innerHTML="";
@@ -1374,7 +1477,7 @@ function showDepartment(
   search.value="";
 
   search.placeholder=
-    "🔎 Buscar localidad...";
+    "🔎 Buscar Radio, TV o Lugar...";
 
 
   const localities=
