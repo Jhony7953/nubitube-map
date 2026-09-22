@@ -586,6 +586,11 @@ const LOCALIDADES_URL=
 const PARAJES_URL=
   "./data/bahra_paraje.geojson";
 
+const BLOGGER_BASE="https://www.nubitube.com";
+const BLOGGER_PAGE_SIZE=50;
+const BLOGGER_MAX_PAGES=20;
+const BLOGGER_TIMEOUT=10000;
+
 
 /* =========================
    ELEMENTOS
@@ -644,6 +649,9 @@ let localityElements=[];
 
 let searchIndex=[];
 let searchTimer=null;
+
+let mediaCatalog=[];
+let mediaLoadReport=null;
 
 
 /* =========================
@@ -2251,6 +2259,177 @@ document.addEventListener(
 
 
 /* =========================
+   BLOGGER · CATÁLOGO INTERNO
+   Cirugía A: sin cambios visuales
+========================= */
+
+function bloggerJsonp(url){
+  return new Promise(function(resolve,reject){
+    const cb="ntMapMedia_"+Date.now()+"_"+Math.floor(Math.random()*1000000);
+    const script=document.createElement("script");
+    let done=false;
+
+    function clean(){
+      if(script.parentNode) script.parentNode.removeChild(script);
+      try{ delete window[cb]; }catch(e){ window[cb]=undefined; }
+    }
+
+    const timer=setTimeout(function(){
+      if(done)return;
+      done=true; clean();
+      reject(new Error("Timeout consultando Blogger"));
+    },BLOGGER_TIMEOUT);
+
+    window[cb]=function(data){
+      if(done)return;
+      done=true; clearTimeout(timer); clean(); resolve(data);
+    };
+
+    script.onerror=function(){
+      if(done)return;
+      done=true; clearTimeout(timer); clean();
+      reject(new Error("Blogger no respondió al JSONP"));
+    };
+
+    script.src=url+(url.indexOf("?")>-1?"&":"?")+
+      "alt=json-in-script&callback="+encodeURIComponent(cb)+"&_="+Date.now();
+    document.body.appendChild(script);
+  });
+}
+
+function bloggerLabels(entry){
+  return (entry&&entry.category?entry.category:[])
+    .map(function(c){return String(c.term||"").trim();})
+    .filter(Boolean);
+}
+
+function bloggerUrl(entry){
+  const links=entry&&entry.link?entry.link:[];
+  for(let i=0;i<links.length;i++){
+    if(links[i].rel==="alternate") return links[i].href||"";
+  }
+  return "";
+}
+
+async function loadBloggerLabel(label,type){
+  let entries=[], requests=0, page=0, hitSafetyLimit=false;
+
+  while(page<BLOGGER_MAX_PAGES){
+    const startIndex=page*BLOGGER_PAGE_SIZE+1;
+    const url=BLOGGER_BASE+"/feeds/posts/default/-/"+encodeURIComponent(label)+
+      "?orderby=published&max-results="+BLOGGER_PAGE_SIZE+
+      "&start-index="+startIndex;
+
+    requests++;
+    const data=await bloggerJsonp(url);
+    const batch=data&&data.feed&&data.feed.entry?data.feed.entry:[];
+    entries=entries.concat(batch);
+
+    if(batch.length<BLOGGER_PAGE_SIZE) break;
+    page++;
+  }
+
+  if(page>=BLOGGER_MAX_PAGES) hitSafetyLimit=true;
+  return {label:label,type:type,entries:entries,requests:requests,hitSafetyLimit:hitSafetyLimit};
+}
+
+function territoryFromLabels(labels){
+  const set=new Set(labels.map(normalizeText));
+  const has=function(name){return set.has(normalizeText(name));};
+
+  const placeItems=searchIndex.filter(function(x){return x.type==="place";});
+  for(let i=0;i<placeItems.length;i++){
+    if(has(placeItems[i].name)){
+      return {
+        place:placeItems[i].place,
+        placeName:placeItems[i].name,
+        department:placeItems[i].department,
+        departmentName:featureName(placeItems[i].department),
+        province:placeItems[i].province,
+        provinceName:featureName(placeItems[i].province)
+      };
+    }
+  }
+
+  const depItems=searchIndex.filter(function(x){return x.type==="department";});
+  for(let i=0;i<depItems.length;i++){
+    if(has(depItems[i].name)){
+      return {
+        place:null,placeName:"",
+        department:depItems[i].department,
+        departmentName:depItems[i].name,
+        province:depItems[i].province,
+        provinceName:featureName(depItems[i].province)
+      };
+    }
+  }
+
+  const provItems=searchIndex.filter(function(x){return x.type==="province";});
+  for(let i=0;i<provItems.length;i++){
+    if(has(provItems[i].name)){
+      return {
+        place:null,placeName:"",
+        department:null,departmentName:"",
+        province:provItems[i].province,
+        provinceName:provItems[i].name
+      };
+    }
+  }
+
+  return {place:null,placeName:"",department:null,departmentName:"",province:null,provinceName:""};
+}
+
+function normalizeMedia(entry,type){
+  const labels=bloggerLabels(entry);
+  return {
+    type:type,
+    icon:type==="radio"?"📻":"📺",
+    title:entry&&entry.title&&entry.title.$t?entry.title.$t.trim():"(sin título)",
+    url:bloggerUrl(entry),
+    labels:labels,
+    territory:territoryFromLabels(labels)
+  };
+}
+
+async function loadMediaCatalog(){
+  const results=await Promise.all([
+    loadBloggerLabel("Radios en Vivo","radio"),
+    loadBloggerLabel("TV en Vivo","tv")
+  ]);
+
+  mediaCatalog=[];
+  results.forEach(function(r){
+    r.entries.forEach(function(e){mediaCatalog.push(normalizeMedia(e,r.type));});
+  });
+
+  mediaLoadReport={
+    total:mediaCatalog.length,
+    radios:mediaCatalog.filter(function(m){return m.type==="radio";}).length,
+    tv:mediaCatalog.filter(function(m){return m.type==="tv";}).length,
+    requests:results[0].requests+results[1].requests,
+    matchedPlace:mediaCatalog.filter(function(m){return !!m.territory.place;}).length,
+    matchedDepartment:mediaCatalog.filter(function(m){return !!m.territory.department;}).length,
+    matchedProvince:mediaCatalog.filter(function(m){return !!m.territory.province;}).length,
+    unmatched:mediaCatalog.filter(function(m){return !m.territory.province;}).length
+  };
+
+  console.group("NubiTube MAP · Blogger Media · Cirugía A");
+  console.table(mediaCatalog.map(function(m){
+    return {
+      tipo:m.type,
+      medio:m.title,
+      lugar:m.territory.placeName||"—",
+      departamento:m.territory.departmentName||"—",
+      provincia:m.territory.provinceName||"—"
+    };
+  }));
+  console.log("Reporte:",mediaLoadReport);
+  console.groupEnd();
+
+  return mediaCatalog;
+}
+
+/* =========================
    CARGA
 ========================= */
 
@@ -2360,6 +2539,12 @@ Promise.all([
 
 
   showArgentina();
+
+
+  loadMediaCatalog().catch(function(error){
+    console.warn("NubiTube MAP · Blogger:",error);
+    mediaLoadReport={total:0,radios:0,tv:0,requests:0,error:error.message};
+  });
 
 })
 
