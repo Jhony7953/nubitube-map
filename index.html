@@ -58,6 +58,65 @@ body{
   color:#8196ae;
 }
 
+.search-wrap{
+  position:relative;
+  z-index:30;
+}
+
+.search-results{
+  display:none;
+  position:absolute;
+  left:0;
+  right:0;
+  top:calc(100% - 7px);
+  max-height:360px;
+  overflow:auto;
+  border:1px solid #17618a;
+  border-radius:0 0 12px 12px;
+  background:#091c35;
+  box-shadow:0 12px 30px rgba(0,0,0,.28);
+}
+
+.search-results.visible{
+  display:block;
+}
+
+.search-result{
+  display:block;
+  width:100%;
+  padding:11px 14px;
+  border:0;
+  border-bottom:1px solid #163b5b;
+  background:#091c35;
+  color:#d9efff;
+  text-align:left;
+  cursor:pointer;
+}
+
+.search-result:last-child{
+  border-bottom:0;
+}
+
+.search-result:hover,
+.search-result:focus{
+  background:#103153;
+  color:#fff;
+  outline:none;
+}
+
+.search-result small{
+  display:block;
+  margin-top:3px;
+  color:#8faac5;
+  font-size:11px;
+}
+
+.search-empty{
+  padding:12px 14px;
+  color:#8faac5;
+  font-size:13px;
+}
+
 .navbar{
   display:flex;
   flex-wrap:wrap;
@@ -422,12 +481,21 @@ svg{
     <p>Mapa interactivo de radios y canales de TV de Argentina</p>
   </div>
 
-  <input
-    id="search"
-    class="search"
-    type="search"
-    placeholder="🔎 Buscar Radio, TV o Lugar..."
-    autocomplete="off">
+  <div class="search-wrap">
+    <input
+      id="search"
+      class="search"
+      type="search"
+      placeholder="🔎 Buscar Radio, TV o Lugar..."
+      autocomplete="off"
+      aria-autocomplete="list"
+      aria-controls="searchResults">
+    <div
+      id="searchResults"
+      class="search-results"
+      role="listbox">
+    </div>
+  </div>
 
   <div class="navbar">
 
@@ -544,6 +612,9 @@ const tag=
 const search=
   document.getElementById("search");
 
+const searchResults=
+  document.getElementById("searchResults");
+
 const breadcrumb=
   document.getElementById("breadcrumb");
 
@@ -570,6 +641,9 @@ let currentDepartment=null;
 
 let regionElements=[];
 let localityElements=[];
+
+let searchIndex=[];
+let searchTimer=null;
 
 
 /* =========================
@@ -1872,83 +1946,306 @@ function selectLocality(
 
 
 /* =========================
-   BUSCADOR
+   BUSCADOR UNIVERSAL
 ========================= */
+
+function provinceIdOf(feature){
+  return String(
+    prop(feature,["id","in1"]) || ""
+  ).padStart(2,"0");
+}
+
+function departmentIdOf(feature){
+  return String(
+    prop(feature,["id","in1"]) || ""
+  ).trim();
+}
+
+function findProvinceById(id){
+  return ((provincias && provincias.features) || [])
+    .find(function(feature){
+      return provinceIdOf(feature)===String(id).padStart(2,"0");
+    }) || null;
+}
+
+function findDepartmentById(id){
+  return ((departamentos && departamentos.features) || [])
+    .find(function(feature){
+      return departmentIdOf(feature)===String(id).trim();
+    }) || null;
+}
+
+function buildSearchIndex(){
+
+  const index=[];
+
+  ((provincias && provincias.features) || [])
+    .forEach(function(feature){
+      index.push({
+        type:"province",
+        name:featureName(feature),
+        province:feature,
+        search:normalizeText(featureName(feature))
+      });
+    });
+
+  ((departamentos && departamentos.features) || [])
+    .forEach(function(feature){
+
+      const depId=departmentIdOf(feature);
+      const province=findProvinceById(depId.substring(0,2));
+
+      if(!province){ return; }
+
+      const provinceName=featureName(province);
+      const departmentName=featureName(feature);
+
+      index.push({
+        type:"department",
+        name:departmentName,
+        subtitle:provinceName,
+        province:province,
+        department:feature,
+        search:normalizeText(
+          departmentName+" "+provinceName
+        )
+      });
+    });
+
+  const rawPlaces=
+    ((localidades && localidades.features) || [])
+      .concat((parajes && parajes.features) || []);
+
+  const seenPlaces=new Set();
+
+  rawPlaces.forEach(function(feature){
+
+    const p=feature.properties || {};
+    const depId=String(p.cod_depto || "").trim();
+    const provinceId=String(p.cod_pcia || depId.substring(0,2)).trim();
+
+    if(!depId){ return; }
+
+    const department=findDepartmentById(depId);
+    const province=findProvinceById(provinceId);
+
+    if(!department || !province){ return; }
+
+    const name=featureName(feature);
+    const departmentName=featureName(department);
+    const provinceName=featureName(province);
+
+    const coords=
+      feature.geometry &&
+      feature.geometry.type==="Point" &&
+      Array.isArray(feature.geometry.coordinates)
+        ? feature.geometry.coordinates
+        : [];
+
+    const key=[
+      depId,
+      normalizeText(name),
+      coords.length>=2 ? Number(coords[0]).toFixed(4) : "",
+      coords.length>=2 ? Number(coords[1]).toFixed(4) : ""
+    ].join("|");
+
+    if(seenPlaces.has(key)){ return; }
+    seenPlaces.add(key);
+
+    index.push({
+      type:"place",
+      name:name,
+      subtitle:departmentName+" · "+provinceName,
+      province:province,
+      department:department,
+      place:feature,
+      search:normalizeText(
+        name+" "+departmentName+" "+provinceName
+      )
+    });
+  });
+
+  searchIndex=index;
+}
+
+function closeSearchResults(){
+  searchResults.innerHTML="";
+  searchResults.classList.remove("visible");
+}
+
+function openSearchResult(item){
+
+  closeSearchResults();
+
+  if(item.type==="province"){
+    showProvince(item.province);
+    return;
+  }
+
+  if(item.type==="department"){
+    showProvince(item.province);
+    showDepartment(item.department);
+    return;
+  }
+
+  if(item.type==="place"){
+    showProvince(item.province);
+    showDepartment(item.department);
+
+    const normalized=
+      normalizeText(featureName(item.place));
+
+    const circle=
+      localityElements.find(function(el){
+        return el.dataset.search===normalized;
+      });
+
+    selectLocality(
+      item.place,
+      circle || null
+    );
+
+    search.value=item.name;
+  }
+}
+
+function renderSearchResults(query){
+
+  const normalized=normalizeText(query);
+
+  if(!normalized){
+    closeSearchResults();
+    return;
+  }
+
+  const matches=searchIndex
+    .filter(function(item){
+      return item.search.indexOf(normalized)!==-1;
+    })
+    .sort(function(a,b){
+
+      const aName=normalizeText(a.name);
+      const bName=normalizeText(b.name);
+
+      const aStarts=aName.indexOf(normalized)===0 ? 0 : 1;
+      const bStarts=bName.indexOf(normalized)===0 ? 0 : 1;
+
+      if(aStarts!==bStarts){
+        return aStarts-bStarts;
+      }
+
+      const order={
+        place:0,
+        department:1,
+        province:2
+      };
+
+      if(order[a.type]!==order[b.type]){
+        return order[a.type]-order[b.type];
+      }
+
+      return a.name.localeCompare(b.name,"es");
+    })
+    .slice(0,30);
+
+  searchResults.innerHTML="";
+
+  if(!matches.length){
+    const empty=document.createElement("div");
+    empty.className="search-empty";
+    empty.textContent="No encontramos ese lugar en la cartografía.";
+    searchResults.appendChild(empty);
+    searchResults.classList.add("visible");
+    return;
+  }
+
+  matches.forEach(function(item){
+
+    const button=document.createElement("button");
+    button.type="button";
+    button.className="search-result";
+
+    const icon=
+      item.type==="place"
+        ? "📍 "
+        : item.type==="department"
+          ? "🗺️ "
+          : "🇦🇷 ";
+
+    const main=document.createElement("span");
+    main.textContent=icon+item.name;
+    button.appendChild(main);
+
+    if(item.subtitle){
+      const small=document.createElement("small");
+      small.textContent=item.subtitle;
+      button.appendChild(small);
+    }
+
+    button.addEventListener(
+      "mousedown",
+      function(event){
+        event.preventDefault();
+        openSearchResult(item);
+      }
+    );
+
+    searchResults.appendChild(button);
+  });
+
+  searchResults.classList.add("visible");
+}
 
 search.addEventListener(
   "input",
   function(){
 
-    const query=
-      normalizeText(
-        search.value
-      );
+    clearTimeout(searchTimer);
 
-
-    const elements=
-      currentLevel==="department"
-        ? localityElements
-        : regionElements;
-
-
-    elements.forEach(
-      function(el){
-
-        el.classList.remove(
-          "selected",
-          "dimmed"
-        );
-
-      }
+    searchTimer=setTimeout(
+      function(){
+        renderSearchResults(search.value);
+      },
+      70
     );
+  }
+);
 
+search.addEventListener(
+  "keydown",
+  function(event){
 
-    if(!query){
-
+    if(event.key==="Escape"){
+      closeSearchResults();
+      search.blur();
       return;
-
     }
 
+    if(event.key==="Enter"){
 
-    const matches=
-      elements.filter(
-        function(el){
-
-          return (
-            el.dataset.search
-              .indexOf(query)!==-1
-          );
-
-        }
-      );
-
-
-    elements.forEach(
-      function(el){
-
-        if(
-          matches.indexOf(el)===-1
-        ){
-
-          el.classList.add(
-            "dimmed"
-          );
-
-        }
-
-      }
-    );
-
-
-    if(matches.length===1){
-
-      matches[0]
-        .classList.add(
-          "selected"
+      const first=
+        searchResults.querySelector(
+          ".search-result"
         );
 
+      if(first){
+        event.preventDefault();
+        first.click();
+      }
     }
+  }
+);
 
+document.addEventListener(
+  "click",
+  function(event){
+
+    if(
+      event.target!==search &&
+      !searchResults.contains(event.target)
+    ){
+      closeSearchResults();
+    }
   }
 );
 
@@ -2057,6 +2354,9 @@ Promise.all([
   loading.classList.add(
     "hidden"
   );
+
+
+  buildSearchIndex();
 
 
   showArgentina();
