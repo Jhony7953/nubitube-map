@@ -54,15 +54,44 @@ body{
   font-size:15px;
 }
 
-.search::placeholder{color:#8196ae}
+.search::placeholder{
+  color:#8196ae;
+}
+
+.navbar{
+  display:flex;
+  flex-wrap:wrap;
+  align-items:center;
+  gap:10px;
+  min-height:38px;
+  margin:0 0 10px 3px;
+}
+
+.back{
+  display:none;
+  padding:7px 11px;
+  border:1px solid #17618a;
+  border-radius:8px;
+  background:#091c35;
+  color:#9bd9f3;
+  cursor:pointer;
+  font-size:13px;
+}
+
+.back.visible{
+  display:inline-block;
+}
+
+.back:hover{
+  border-color:#00c9ff;
+  color:#fff;
+}
 
 .breadcrumb{
   display:flex;
   flex-wrap:wrap;
   align-items:center;
   gap:6px;
-  min-height:32px;
-  margin:0 0 10px 3px;
   color:#8faac5;
   font-size:13px;
 }
@@ -98,7 +127,12 @@ body{
   border:1px solid #17618a;
   border-radius:18px;
   background:
-    radial-gradient(circle at 50% 40%,#12365e 0%,#091c35 55%,#07182e 100%);
+    radial-gradient(
+      circle at 50% 40%,
+      #12365e 0%,
+      #091c35 55%,
+      #07182e 100%
+    );
 }
 
 svg{
@@ -113,7 +147,10 @@ svg{
   stroke-width:.7;
   vector-effect:non-scaling-stroke;
   cursor:pointer;
-  transition:fill .15s,stroke .15s,opacity .15s;
+  transition:
+    fill .15s,
+    stroke .15s,
+    opacity .15s;
 }
 
 .region:hover{
@@ -139,7 +176,10 @@ svg{
   stroke-width:1.5;
   vector-effect:non-scaling-stroke;
   cursor:pointer;
-  transition:opacity .15s,fill .15s;
+  transition:
+    opacity .15s,
+    fill .15s,
+    stroke .15s;
 }
 
 .locality:hover,
@@ -208,9 +248,11 @@ svg{
   cursor:pointer;
 }
 
-.locality-item:hover{
+.locality-item:hover,
+.locality-item.selected{
   border-color:#00c9ff;
   color:#fff;
+  background:#103153;
 }
 
 .loading{
@@ -226,22 +268,44 @@ svg{
   text-align:center;
 }
 
-.loading.hidden{display:none}
-.error{color:#ffb5b5}
+.loading.hidden{
+  display:none;
+}
+
+.error{
+  color:#ffb5b5;
+}
 
 @media(max-width:760px){
 
-  #app{padding:12px}
+  #app{
+    padding:12px;
+  }
 
-  .header h1{font-size:25px}
+  .header h1{
+    font-size:25px;
+  }
 
-  .layout{grid-template-columns:1fr}
+  .layout{
+    grid-template-columns:1fr;
+  }
 
-  .mapbox{min-height:500px}
+  .mapbox{
+    min-height:500px;
+  }
 
-  svg{height:500px}
+  svg{
+    height:500px;
+  }
 
-  .panel{min-height:170px}
+  .panel{
+    min-height:170px;
+  }
+
+  .navbar{
+    align-items:flex-start;
+    flex-direction:column;
+  }
 }
 </style>
 </head>
@@ -262,13 +326,29 @@ svg{
     placeholder="🔎 Buscar provincia..."
     autocomplete="off">
 
-  <div id="breadcrumb" class="breadcrumb"></div>
+  <div class="navbar">
+
+    <button
+      id="back"
+      class="back"
+      type="button">
+      ← Volver
+    </button>
+
+    <div
+      id="breadcrumb"
+      class="breadcrumb">
+    </div>
+
+  </div>
 
   <div class="layout">
 
     <div class="mapbox">
 
-      <div id="loading" class="loading">
+      <div
+        id="loading"
+        class="loading">
         Cargando cartografía...
       </div>
 
@@ -283,21 +363,30 @@ svg{
 
     <aside class="panel">
 
-      <h2 id="title">🇦🇷 Argentina</h2>
+      <h2 id="title">
+        🇦🇷 Argentina
+      </h2>
 
       <p id="info">
         Seleccioná una provincia para explorar sus departamentos y medios.
       </p>
 
-      <p id="context" class="context">
+      <p
+        id="context"
+        class="context">
         Explorá radios y canales de TV de Argentina
       </p>
 
-      <span id="tag" class="tag">
+      <span
+        id="tag"
+        class="tag">
         Seleccioná una provincia
       </span>
 
-      <div id="localityList" class="locality-list"></div>
+      <div
+        id="localityList"
+        class="locality-list">
+      </div>
 
     </aside>
 
@@ -310,25 +399,65 @@ svg{
 
 "use strict";
 
-const PROVINCIAS_URL="./data/argentina.geojson";
-const DEPARTAMENTOS_URL="./data/departamentos.geojson";
-const LOCALIDADES_URL="./data/localidad_bahra.geojson";
+/* =========================
+   ARCHIVOS
+========================= */
 
-const svg=document.getElementById("map");
-const loading=document.getElementById("loading");
-const title=document.getElementById("title");
-const info=document.getElementById("info");
-const context=document.getElementById("context");
-const tag=document.getElementById("tag");
-const search=document.getElementById("search");
-const breadcrumb=document.getElementById("breadcrumb");
-const localityList=document.getElementById("localityList");
+const PROVINCIAS_URL=
+  "./data/argentina.geojson";
+
+const DEPARTAMENTOS_URL=
+  "./data/departamentos.geojson";
+
+const LOCALIDADES_URL=
+  "./data/localidad_bahra.geojson";
+
+
+/* =========================
+   ELEMENTOS
+========================= */
+
+const svg=
+  document.getElementById("map");
+
+const loading=
+  document.getElementById("loading");
+
+const title=
+  document.getElementById("title");
+
+const info=
+  document.getElementById("info");
+
+const context=
+  document.getElementById("context");
+
+const tag=
+  document.getElementById("tag");
+
+const search=
+  document.getElementById("search");
+
+const breadcrumb=
+  document.getElementById("breadcrumb");
+
+const back=
+  document.getElementById("back");
+
+const localityList=
+  document.getElementById("localityList");
+
+
+/* =========================
+   ESTADO
+========================= */
 
 let provincias=null;
 let departamentos=null;
 let localidades=null;
 
 let currentLevel="country";
+
 let currentProvince=null;
 let currentDepartment=null;
 
@@ -342,7 +471,7 @@ let localityElements=[];
 
 function normalizeText(text){
 
-  return String(text||"")
+  return String(text || "")
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g,"")
     .toLowerCase()
@@ -355,9 +484,10 @@ function normalizeText(text){
    PROPIEDADES
 ========================= */
 
-function prop(obj,names){
+function prop(feature,names){
 
-  const p=(obj && obj.properties) || {};
+  const p=
+    (feature && feature.properties) || {};
 
   for(const name of names){
 
@@ -379,13 +509,23 @@ function prop(obj,names){
 function featureName(feature){
 
   return String(
+
     prop(feature,[
+
       "nombre",
       "nam",
+
+      /* BAHRA */
+      "fna",
+      "nom_agl",
+      "nom_aglo",
+
       "nombre_localidad",
       "localidad",
       "name"
+
     ]) || "Sin nombre"
+
   );
 
 }
@@ -397,7 +537,9 @@ function featureName(feature){
 
 function rawRings(geometry){
 
-  if(!geometry) return [];
+  if(!geometry){
+    return [];
+  }
 
   if(geometry.type==="Polygon"){
     return geometry.coordinates;
@@ -406,7 +548,9 @@ function rawRings(geometry){
   if(geometry.type==="MultiPolygon"){
 
     return geometry.coordinates.reduce(
-      (all,polygon)=>all.concat(polygon),
+      function(all,polygon){
+        return all.concat(polygon);
+      },
       []
     );
 
@@ -418,23 +562,28 @@ function rawRings(geometry){
 
 
 /*
- Vista principal:
- Argentina continental + Tierra del Fuego
- e islas próximas.
+  Encuadre NubiTube MAP:
+  Argentina continental +
+  Tierra del Fuego +
+  islas próximas.
 
- La fuente original no se modifica.
+  No altera el archivo original.
 */
 
 function ringVisible(ring){
 
-  if(!ring || !ring.length) return false;
+  if(!ring || !ring.length){
+    return false;
+  }
 
   let lon=0;
   let lat=0;
 
-  ring.forEach(p=>{
-    lon+=p[0];
-    lat+=p[1];
+  ring.forEach(function(point){
+
+    lon+=point[0];
+    lat+=point[1];
+
   });
 
   lon/=ring.length;
@@ -451,85 +600,157 @@ function ringVisible(ring){
 
 function displayRings(geometry){
 
-  return rawRings(geometry).filter(ringVisible);
+  return rawRings(geometry)
+    .filter(ringVisible);
 
 }
 
 
 /* =========================
-   PROYECCIÓN POLÍGONOS
+   PROYECCIÓN
 ========================= */
 
 function createProjection(features){
 
   const points=[];
 
-  features.forEach(feature=>{
+  features.forEach(function(feature){
 
-    displayRings(feature.geometry).forEach(ring=>{
+    displayRings(feature.geometry)
+      .forEach(function(ring){
 
-      ring.forEach(point=>{
-        points.push(point);
+        ring.forEach(function(point){
+
+          points.push(point);
+
+        });
+
       });
-
-    });
 
   });
 
+
   if(!points.length){
-    throw new Error("No se encontraron geometrías visibles.");
+
+    throw new Error(
+      "No se encontraron geometrías visibles."
+    );
+
   }
 
-  const xs=points.map(p=>p[0]);
-  const ys=points.map(p=>p[1]);
 
-  const minX=Math.min(...xs);
-  const maxX=Math.max(...xs);
-  const minY=Math.min(...ys);
-  const maxY=Math.max(...ys);
+  const xs=
+    points.map(function(p){
+      return p[0];
+    });
+
+  const ys=
+    points.map(function(p){
+      return p[1];
+    });
+
+
+  const minX=Math.min.apply(null,xs);
+  const maxX=Math.max.apply(null,xs);
+
+  const minY=Math.min.apply(null,ys);
+  const maxY=Math.max.apply(null,ys);
+
 
   const W=800;
   const H=900;
   const PAD=35;
 
+
   const scale=Math.min(
+
     (W-PAD*2)/(maxX-minX),
+
     (H-PAD*2)/(maxY-minY)
+
   );
 
-  const usedW=(maxX-minX)*scale;
-  const usedH=(maxY-minY)*scale;
 
-  const offsetX=(W-usedW)/2;
-  const offsetY=(H-usedH)/2;
+  const usedW=
+    (maxX-minX)*scale;
+
+  const usedH=
+    (maxY-minY)*scale;
+
+
+  const offsetX=
+    (W-usedW)/2;
+
+  const offsetY=
+    (H-usedH)/2;
+
 
   return {
 
-    x:lon=>offsetX+(lon-minX)*scale,
+    x:function(lon){
 
-    y:lat=>H-(offsetY+(lat-minY)*scale)
+      return offsetX+
+        (lon-minX)*scale;
+
+    },
+
+    y:function(lat){
+
+      return H-
+        (
+          offsetY+
+          (lat-minY)*scale
+        );
+
+    }
 
   };
 
 }
 
 
-function geometryToPath(geometry,project){
+/* =========================
+   SVG PATH
+========================= */
+
+function geometryToPath(
+  geometry,
+  project
+){
 
   return displayRings(geometry)
 
-    .map(ring=>
+    .map(function(ring){
 
-      ring.map((point,index)=>{
+      return ring
 
-        const x=project.x(point[0]).toFixed(2);
-        const y=project.y(point[1]).toFixed(2);
+        .map(function(point,index){
 
-        return (index===0?"M":"L")+x+","+y;
+          const x=
+            project.x(point[0])
+              .toFixed(2);
 
-      }).join("")+"Z"
+          const y=
+            project.y(point[1])
+              .toFixed(2);
 
-    ).join("");
+          return (
+            index===0
+              ? "M"
+              : "L"
+          )+
+          x+
+          ","+
+          y;
+
+        })
+
+        .join("")+
+        "Z";
+
+    })
+
+    .join("");
 
 }
 
@@ -542,135 +763,297 @@ function renderBreadcrumb(){
 
   breadcrumb.innerHTML="";
 
+
   if(currentLevel==="country"){
 
-    const span=document.createElement("span");
-    span.className="crumb-current";
-    span.textContent="🇦🇷 Argentina";
+    const current=
+      document.createElement("span");
 
-    breadcrumb.appendChild(span);
+    current.className=
+      "crumb-current";
+
+    current.textContent=
+      "🇦🇷 Argentina";
+
+    breadcrumb.appendChild(current);
+
     return;
 
   }
 
 
-  const argentina=document.createElement("button");
+  const argentina=
+    document.createElement("button");
 
-  argentina.className="crumb-btn";
-  argentina.textContent="🇦🇷 Argentina";
+  argentina.className=
+    "crumb-btn";
 
-  argentina.addEventListener("click",showArgentina);
+  argentina.textContent=
+    "🇦🇷 Argentina";
 
-  breadcrumb.appendChild(argentina);
+  argentina.addEventListener(
+    "click",
+    showArgentina
+  );
+
+  breadcrumb.appendChild(
+    argentina
+  );
 
 
-  const sep1=document.createElement("span");
+  const sep1=
+    document.createElement("span");
+
   sep1.textContent="›";
+
   breadcrumb.appendChild(sep1);
 
 
   if(currentLevel==="province"){
 
-    const current=document.createElement("span");
+    const current=
+      document.createElement("span");
 
-    current.className="crumb-current";
-    current.textContent=currentProvince.name;
+    current.className=
+      "crumb-current";
 
-    breadcrumb.appendChild(current);
+    current.textContent=
+      currentProvince.name;
+
+    breadcrumb.appendChild(
+      current
+    );
 
     return;
+
   }
 
 
-  const provinceButton=document.createElement("button");
+  const provinceButton=
+    document.createElement("button");
 
-  provinceButton.className="crumb-btn";
-  provinceButton.textContent=currentProvince.name;
+  provinceButton.className=
+    "crumb-btn";
 
-  provinceButton.addEventListener("click",function(){
+  provinceButton.textContent=
+    currentProvince.name;
 
-    showProvince(currentProvince.feature);
+  provinceButton.addEventListener(
+    "click",
+    function(){
 
-  });
+      showProvince(
+        currentProvince.feature
+      );
 
-  breadcrumb.appendChild(provinceButton);
+    }
+  );
+
+  breadcrumb.appendChild(
+    provinceButton
+  );
 
 
-  const sep2=document.createElement("span");
+  const sep2=
+    document.createElement("span");
+
   sep2.textContent="›";
 
   breadcrumb.appendChild(sep2);
 
 
-  const current=document.createElement("span");
+  const current=
+    document.createElement("span");
 
-  current.className="crumb-current";
-  current.textContent=currentDepartment.name;
+  current.className=
+    "crumb-current";
 
-  breadcrumb.appendChild(current);
+  current.textContent=
+    currentDepartment.name;
+
+  breadcrumb.appendChild(
+    current
+  );
 
 }
+
+
+/* =========================
+   BOTÓN VOLVER
+========================= */
+
+function updateBackButton(){
+
+  if(currentLevel==="country"){
+
+    back.classList.remove(
+      "visible"
+    );
+
+    return;
+
+  }
+
+
+  back.classList.add(
+    "visible"
+  );
+
+
+  if(currentLevel==="province"){
+
+    back.textContent=
+      "← Volver a Argentina";
+
+  }
+
+  else if(
+    currentLevel==="department"
+  ){
+
+    back.textContent=
+      "← Volver a "+
+      currentProvince.name;
+
+  }
+
+}
+
+
+back.addEventListener(
+  "click",
+  function(){
+
+    if(currentLevel==="province"){
+
+      showArgentina();
+
+      return;
+
+    }
+
+
+    if(currentLevel==="department"){
+
+      showProvince(
+        currentProvince.feature
+      );
+
+    }
+
+  }
+);
 
 
 /* =========================
    DIBUJAR POLÍGONOS
 ========================= */
 
-function drawFeatures(features,onClick){
+function drawFeatures(
+  features,
+  onClick
+){
 
   svg.innerHTML="";
 
   regionElements=[];
   localityElements=[];
 
-  const visible=features.filter(feature=>
-    displayRings(feature.geometry).length
-  );
 
-  const project=createProjection(visible);
+  const visible=
+    features.filter(function(feature){
 
-  visible.forEach(feature=>{
-
-    const name=featureName(feature);
-
-    const d=geometryToPath(
-      feature.geometry,
-      project
-    );
-
-    if(!d) return;
-
-    const path=document.createElementNS(
-      "http://www.w3.org/2000/svg",
-      "path"
-    );
-
-    path.setAttribute("d",d);
-    path.setAttribute("class","region");
-
-    path.dataset.name=name;
-    path.dataset.search=normalizeText(name);
-
-    const tooltip=document.createElementNS(
-      "http://www.w3.org/2000/svg",
-      "title"
-    );
-
-    tooltip.textContent=name;
-
-    path.appendChild(tooltip);
-
-
-    path.addEventListener("click",function(){
-
-      onClick(feature,path,project);
+      return (
+        displayRings(
+          feature.geometry
+        ).length>0
+      );
 
     });
 
 
-    svg.appendChild(path);
+  const project=
+    createProjection(visible);
 
-    regionElements.push(path);
+
+  visible.forEach(function(feature){
+
+    const name=
+      featureName(feature);
+
+
+    const d=
+      geometryToPath(
+        feature.geometry,
+        project
+      );
+
+
+    if(!d){
+      return;
+    }
+
+
+    const path=
+      document.createElementNS(
+        "http://www.w3.org/2000/svg",
+        "path"
+      );
+
+
+    path.setAttribute(
+      "d",
+      d
+    );
+
+    path.setAttribute(
+      "class",
+      "region"
+    );
+
+
+    path.dataset.name=
+      name;
+
+    path.dataset.search=
+      normalizeText(name);
+
+
+    const tooltip=
+      document.createElementNS(
+        "http://www.w3.org/2000/svg",
+        "title"
+      );
+
+    tooltip.textContent=
+      name;
+
+    path.appendChild(
+      tooltip
+    );
+
+
+    path.addEventListener(
+      "click",
+      function(){
+
+        onClick(
+          feature,
+          path,
+          project
+        );
+
+      }
+    );
+
+
+    svg.appendChild(
+      path
+    );
+
+    regionElements.push(
+      path
+    );
 
   });
 
@@ -686,37 +1069,59 @@ function drawFeatures(features,onClick){
 
 function showArgentina(){
 
-  currentLevel="country";
-  currentProvince=null;
-  currentDepartment=null;
+  currentLevel=
+    "country";
+
+  currentProvince=
+    null;
+
+  currentDepartment=
+    null;
+
 
   search.value="";
-  search.placeholder="🔎 Buscar provincia...";
+
+  search.placeholder=
+    "🔎 Buscar provincia...";
+
 
   localityList.innerHTML="";
-  localityList.classList.remove("visible");
 
-  title.textContent="🇦🇷 Argentina";
+  localityList.classList.remove(
+    "visible"
+  );
+
+
+  title.textContent=
+    "🇦🇷 Argentina";
+
 
   info.textContent=
     "Seleccioná una provincia para explorar sus departamentos y medios.";
 
+
   context.textContent=
     "Explorá radios y canales de TV de Argentina";
+
 
   tag.textContent=
     "Seleccioná una provincia";
 
+
   renderBreadcrumb();
+  updateBackButton();
 
 
   drawFeatures(
+
     provincias.features,
+
     function(feature){
 
       showProvince(feature);
 
     }
+
   );
 
 }
@@ -726,55 +1131,98 @@ function showArgentina(){
    PROVINCIA
 ========================= */
 
-function showProvince(provinceFeature){
+function showProvince(
+  provinceFeature
+){
 
-  const provinceName=featureName(provinceFeature);
+  const provinceName=
+    featureName(
+      provinceFeature
+    );
 
-  const provinceId=String(
-    prop(provinceFeature,["id","in1"])
-  ).padStart(2,"0");
+
+  const provinceId=
+    String(
+
+      prop(
+        provinceFeature,
+        ["id","in1"]
+      )
+
+    ).padStart(2,"0");
 
 
-  currentLevel="province";
+  currentLevel=
+    "province";
+
 
   currentProvince={
+
     id:provinceId,
     name:provinceName,
     feature:provinceFeature
+
   };
 
-  currentDepartment=null;
+
+  currentDepartment=
+    null;
+
 
   search.value="";
-  search.placeholder="🔎 Buscar departamento...";
+
+  search.placeholder=
+    "🔎 Buscar departamento...";
+
 
   localityList.innerHTML="";
-  localityList.classList.remove("visible");
+
+  localityList.classList.remove(
+    "visible"
+  );
 
 
-  const filtered=departamentos.features.filter(feature=>{
+  const filtered=
+    departamentos.features
+      .filter(function(feature){
 
-    const depId=String(
-      prop(feature,["id","in1"])
-    );
+        const depId=
+          String(
+            prop(
+              feature,
+              ["id","in1"]
+            )
+          );
 
-    return depId.substring(0,2)===provinceId;
+        return (
+          depId.substring(0,2)
+          ===
+          provinceId
+        );
 
-  });
+      });
 
 
-  title.textContent=provinceName;
+  title.textContent=
+    provinceName;
+
 
   info.textContent=
     "Seleccioná un departamento para explorar sus localidades.";
 
+
   context.textContent=
-    "Explorá radios y canales de TV de "+provinceName;
+    "Explorá radios y canales de TV de "+
+    provinceName;
+
 
   tag.textContent=
-    filtered.length+" departamentos";
+    filtered.length+
+    " departamentos";
+
 
   renderBreadcrumb();
+  updateBackButton();
 
 
   if(!filtered.length){
@@ -790,95 +1238,97 @@ function showProvince(provinceFeature){
 
 
   drawFeatures(
+
     filtered,
+
     function(feature){
 
-      showDepartment(feature);
+      showDepartment(
+        feature
+      );
 
     }
+
   );
 
 }
 
 
 /* =========================
-   LOCALIDADES DEL
-   DEPARTAMENTO
+   LOCALIDADES BAHRA
 ========================= */
 
-function departmentLocalities(departmentFeature){
+function departmentLocalities(
+  departmentFeature
+){
 
-  const depId=String(
-    prop(departmentFeature,["id","in1"])
-  );
+  /*
+    departamentos.geojson:
+    id = código oficial del departamento
 
+    localidad_bahra.geojson:
+    cod_depto = código oficial del departamento
+  */
 
-  return localidades.features.filter(feature=>{
+  const depId=
+    String(
 
-    const p=(feature.properties||{});
+      prop(
+        departmentFeature,
+        ["id","in1"]
+      )
 
-
-    /*
-      BAHRA/IGN puede incluir diferentes
-      denominaciones de campos según versión.
-
-      Primero buscamos códigos oficiales.
-    */
-
-    const possibleCodes=[
-      p.departamento_id,
-      p.departamento_codigo,
-      p.codigo_departamento,
-      p.in1,
-      p.in2,
-      p.fdc
-    ]
-    .filter(v=>
-      v!==undefined &&
-      v!==null &&
-      String(v)!==""
-    )
-    .map(v=>String(v));
+    ).trim();
 
 
-    if(possibleCodes.some(code=>
-      code===depId ||
-      code.startsWith(depId)
-    )){
-      return true;
-    }
+  const provinceId=
+    String(
+      currentProvince.id
+    ).trim();
 
 
-    /*
-      Respaldo por nombre + provincia.
-    */
+  return localidades.features
+    .filter(function(feature){
 
-    const departmentName=normalizeText(
-      prop(feature,[
-        "departamento",
-        "nombre_departamento",
-        "departamento_nombre"
-      ])
-    );
-
-    const provinceName=normalizeText(
-      prop(feature,[
-        "provincia",
-        "nombre_provincia",
-        "provincia_nombre"
-      ])
-    );
+      const p=
+        feature.properties || {};
 
 
-    return (
-      departmentName===
-        normalizeText(featureName(departmentFeature))
-      &&
-      provinceName===
-        normalizeText(currentProvince.name)
-    );
+      const localityDepartment=
+        String(
+          p.cod_depto || ""
+        ).trim();
 
-  });
+
+      const localityProvince=
+        String(
+          p.cod_pcia || ""
+        ).trim();
+
+
+      /*
+        La coincidencia principal
+        es por código de departamento.
+
+        También verificamos provincia
+        si BAHRA trae cod_pcia.
+      */
+
+      const sameDepartment=
+        localityDepartment===depId;
+
+
+      const sameProvince=
+        !localityProvince ||
+        localityProvince===provinceId;
+
+
+      return (
+        sameDepartment &&
+        sameProvince
+      );
+
+    });
 
 }
 
@@ -887,51 +1337,86 @@ function departmentLocalities(departmentFeature){
    DEPARTAMENTO
 ========================= */
 
-function showDepartment(departmentFeature){
+function showDepartment(
+  departmentFeature
+){
 
   const departmentName=
-    featureName(departmentFeature);
+    featureName(
+      departmentFeature
+    );
 
-  currentLevel="department";
+
+  const departmentId=
+    String(
+
+      prop(
+        departmentFeature,
+        ["id","in1"]
+      )
+
+    ).trim();
+
+
+  currentLevel=
+    "department";
+
 
   currentDepartment={
-    id:String(
-      prop(departmentFeature,["id","in1"])
-    ),
+
+    id:departmentId,
     name:departmentName,
     feature:departmentFeature
+
   };
 
 
   search.value="";
-  search.placeholder="🔎 Buscar localidad...";
+
+  search.placeholder=
+    "🔎 Buscar localidad...";
 
 
   const localities=
-    departmentLocalities(departmentFeature);
+    departmentLocalities(
+      departmentFeature
+    );
 
 
-  title.textContent=departmentName;
+  title.textContent=
+    departmentName;
+
 
   info.textContent=
     "Seleccioná una localidad para explorar sus radios y canales de TV.";
 
+
   context.textContent=
-    "Explorá radios y canales de TV de "+departmentName;
+    "Explorá radios y canales de TV de "+
+    departmentName;
+
 
   tag.textContent=
     localities.length+
-    (localities.length===1
-      ?" localidad"
-      :" localidades");
+    (
+      localities.length===1
+        ? " localidad"
+        : " localidades"
+    );
+
 
   renderBreadcrumb();
+  updateBackButton();
 
 
-  const project=drawFeatures(
-    [departmentFeature],
-    function(){}
-  );
+  const project=
+    drawFeatures(
+
+      [departmentFeature],
+
+      function(){}
+
+    );
 
 
   drawLocalities(
@@ -940,7 +1425,9 @@ function showDepartment(departmentFeature){
   );
 
 
-  renderLocalityList(localities);
+  renderLocalityList(
+    localities
+  );
 
 }
 
@@ -949,146 +1436,227 @@ function showDepartment(departmentFeature){
    PUNTOS DE LOCALIDAD
 ========================= */
 
-function drawLocalities(features,project){
+function drawLocalities(
+  features,
+  project
+){
 
   localityElements=[];
 
 
-  features.forEach(feature=>{
+  features.forEach(
+    function(feature){
 
-    if(
-      !feature.geometry ||
-      feature.geometry.type!=="Point"
-    ){
-      return;
-    }
-
-
-    const coords=feature.geometry.coordinates;
-
-    if(
-      !Array.isArray(coords) ||
-      coords.length<2
-    ){
-      return;
-    }
+      if(
+        !feature.geometry ||
+        feature.geometry.type!=="Point"
+      ){
+        return;
+      }
 
 
-    const name=featureName(feature);
-
-    const circle=document.createElementNS(
-      "http://www.w3.org/2000/svg",
-      "circle"
-    );
+      const coords=
+        feature.geometry.coordinates;
 
 
-    circle.setAttribute(
-      "cx",
-      project.x(coords[0])
-    );
-
-    circle.setAttribute(
-      "cy",
-      project.y(coords[1])
-    );
-
-    circle.setAttribute("r","7");
-    circle.setAttribute("class","locality");
-
-    circle.dataset.name=name;
-    circle.dataset.search=normalizeText(name);
+      if(
+        !Array.isArray(coords) ||
+        coords.length<2
+      ){
+        return;
+      }
 
 
-    const tooltip=document.createElementNS(
-      "http://www.w3.org/2000/svg",
-      "title"
-    );
-
-    tooltip.textContent=name;
-
-    circle.appendChild(tooltip);
+      const name=
+        featureName(feature);
 
 
-    circle.addEventListener("click",function(){
+      const circle=
+        document.createElementNS(
+          "http://www.w3.org/2000/svg",
+          "circle"
+        );
 
-      selectLocality(
-        feature,
+
+      circle.setAttribute(
+        "cx",
+        project.x(coords[0])
+      );
+
+
+      circle.setAttribute(
+        "cy",
+        project.y(coords[1])
+      );
+
+
+      circle.setAttribute(
+        "r",
+        "7"
+      );
+
+
+      circle.setAttribute(
+        "class",
+        "locality"
+      );
+
+
+      circle.dataset.name=
+        name;
+
+
+      circle.dataset.search=
+        normalizeText(name);
+
+
+      const tooltip=
+        document.createElementNS(
+          "http://www.w3.org/2000/svg",
+          "title"
+        );
+
+
+      tooltip.textContent=
+        name;
+
+
+      circle.appendChild(
+        tooltip
+      );
+
+
+      circle.addEventListener(
+        "click",
+        function(){
+
+          selectLocality(
+            feature,
+            circle
+          );
+
+        }
+      );
+
+
+      svg.appendChild(
         circle
       );
 
-    });
 
+      localityElements.push(
+        circle
+      );
 
-    svg.appendChild(circle);
-
-    localityElements.push(circle);
-
-  });
+    }
+  );
 
 }
 
 
 /* =========================
-   LISTA DE LOCALIDADES
+   LISTA LOCALIDADES
 ========================= */
 
-function renderLocalityList(features){
+function renderLocalityList(
+  features
+){
 
   localityList.innerHTML="";
 
 
   if(!features.length){
 
-    localityList.classList.remove("visible");
+    localityList.classList.remove(
+      "visible"
+    );
+
     return;
 
   }
 
 
-  const sorted=[...features].sort((a,b)=>
+  const sorted=
+    features.slice()
+      .sort(function(a,b){
 
-    featureName(a).localeCompare(
-      featureName(b),
-      "es"
-    )
+        return featureName(a)
+          .localeCompare(
+            featureName(b),
+            "es"
+          );
 
+      });
+
+
+  sorted.forEach(
+    function(feature){
+
+      const button=
+        document.createElement(
+          "button"
+        );
+
+
+      button.className=
+        "locality-item";
+
+
+      button.textContent=
+        "📍 "+
+        featureName(feature);
+
+
+      button.dataset.search=
+        normalizeText(
+          featureName(feature)
+        );
+
+
+      button.addEventListener(
+        "click",
+        function(){
+
+          const normalized=
+            normalizeText(
+              featureName(feature)
+            );
+
+
+          const circle=
+            localityElements.find(
+              function(el){
+
+                return (
+                  el.dataset.search
+                  ===
+                  normalized
+                );
+
+              }
+            );
+
+
+          selectLocality(
+            feature,
+            circle || null
+          );
+
+        }
+      );
+
+
+      localityList.appendChild(
+        button
+      );
+
+    }
   );
 
 
-  sorted.forEach(feature=>{
-
-    const button=document.createElement("button");
-
-    button.className="locality-item";
-
-    button.textContent=
-      "📍 "+featureName(feature);
-
-
-    button.addEventListener("click",function(){
-
-      const normalized=
-        normalizeText(featureName(feature));
-
-      const circle=
-        localityElements.find(el=>
-          el.dataset.search===normalized
-        );
-
-      selectLocality(
-        feature,
-        circle || null
-      );
-
-    });
-
-
-    localityList.appendChild(button);
-
-  });
-
-
-  localityList.classList.add("visible");
+  localityList.classList.add(
+    "visible"
+  );
 
 }
 
@@ -1097,28 +1665,85 @@ function renderLocalityList(features){
    SELECCIONAR LOCALIDAD
 ========================= */
 
-function selectLocality(feature,circle){
+function selectLocality(
+  feature,
+  circle
+){
 
-  localityElements.forEach(el=>
-    el.classList.remove("selected")
+  localityElements.forEach(
+    function(el){
+
+      el.classList.remove(
+        "selected"
+      );
+
+    }
   );
 
 
+  document
+    .querySelectorAll(
+      ".locality-item"
+    )
+    .forEach(
+      function(button){
+
+        button.classList.remove(
+          "selected"
+        );
+
+      }
+    );
+
+
   if(circle){
-    circle.classList.add("selected");
+
+    circle.classList.add(
+      "selected"
+    );
+
   }
 
 
-  const name=featureName(feature);
+  const name=
+    featureName(feature);
 
 
-  title.textContent=name;
+  document
+    .querySelectorAll(
+      ".locality-item"
+    )
+    .forEach(
+      function(button){
+
+        if(
+          button.dataset.search
+          ===
+          normalizeText(name)
+        ){
+
+          button.classList.add(
+            "selected"
+          );
+
+        }
+
+      }
+    );
+
+
+  title.textContent=
+    name;
+
 
   info.textContent=
     "Localidad seleccionada. Aquí conectaremos automáticamente sus radios y canales de TV publicados en NubiTube.";
 
+
   context.textContent=
-    "Explorá radios y canales de TV de "+name;
+    "Explorá radios y canales de TV de "+
+    name;
+
 
   tag.textContent=
     "Localidad seleccionada";
@@ -1130,106 +1755,146 @@ function selectLocality(feature,circle){
    BUSCADOR
 ========================= */
 
-search.addEventListener("input",function(){
+search.addEventListener(
+  "input",
+  function(){
 
-  const query=normalizeText(search.value);
-
-  const elements=
-    currentLevel==="department"
-      ? localityElements
-      : regionElements;
+    const query=
+      normalizeText(
+        search.value
+      );
 
 
-  elements.forEach(el=>{
+    const elements=
+      currentLevel==="department"
+        ? localityElements
+        : regionElements;
 
-    el.classList.remove(
-      "selected",
-      "dimmed"
+
+    elements.forEach(
+      function(el){
+
+        el.classList.remove(
+          "selected",
+          "dimmed"
+        );
+
+      }
     );
 
-  });
 
+    if(!query){
 
-  if(!query){
-    return;
-  }
+      return;
 
-
-  const matches=elements.filter(el=>
-
-    el.dataset.search.includes(query)
-
-  );
-
-
-  elements.forEach(el=>{
-
-    if(!matches.includes(el)){
-      el.classList.add("dimmed");
     }
 
-  });
+
+    const matches=
+      elements.filter(
+        function(el){
+
+          return (
+            el.dataset.search
+              .indexOf(query)!==-1
+          );
+
+        }
+      );
 
 
-  if(matches.length===1){
+    elements.forEach(
+      function(el){
 
-    matches[0].classList.add("selected");
+        if(
+          matches.indexOf(el)===-1
+        ){
+
+          el.classList.add(
+            "dimmed"
+          );
+
+        }
+
+      }
+    );
+
+
+    if(matches.length===1){
+
+      matches[0]
+        .classList.add(
+          "selected"
+        );
+
+    }
 
   }
-
-});
+);
 
 
 /* =========================
-   CARGA DE DATOS
+   CARGA
 ========================= */
 
 Promise.all([
 
-  fetch(PROVINCIAS_URL,{
-    cache:"no-store"
-  })
-  .then(r=>{
+  fetch(
+    PROVINCIAS_URL,
+    {cache:"no-store"}
+  )
+  .then(function(response){
 
-    if(!r.ok){
+    if(!response.ok){
+
       throw new Error(
-        "Provincias HTTP "+r.status
+        "Provincias HTTP "+
+        response.status
       );
+
     }
 
-    return r.json();
+    return response.json();
 
   }),
 
 
-  fetch(DEPARTAMENTOS_URL,{
-    cache:"no-store"
-  })
-  .then(r=>{
+  fetch(
+    DEPARTAMENTOS_URL,
+    {cache:"no-store"}
+  )
+  .then(function(response){
 
-    if(!r.ok){
+    if(!response.ok){
+
       throw new Error(
-        "Departamentos HTTP "+r.status
+        "Departamentos HTTP "+
+        response.status
       );
+
     }
 
-    return r.json();
+    return response.json();
 
   }),
 
 
-  fetch(LOCALIDADES_URL,{
-    cache:"no-store"
-  })
-  .then(r=>{
+  fetch(
+    LOCALIDADES_URL,
+    {cache:"no-store"}
+  )
+  .then(function(response){
 
-    if(!r.ok){
+    if(!response.ok){
+
       throw new Error(
-        "Localidades HTTP "+r.status
+        "Localidades HTTP "+
+        response.status
       );
+
     }
 
-    return r.json();
+    return response.json();
 
   })
 
@@ -1237,11 +1902,20 @@ Promise.all([
 
 .then(function(data){
 
-  provincias=data[0];
-  departamentos=data[1];
-  localidades=data[2];
+  provincias=
+    data[0];
 
-  loading.classList.add("hidden");
+  departamentos=
+    data[1];
+
+  localidades=
+    data[2];
+
+
+  loading.classList.add(
+    "hidden"
+  );
+
 
   showArgentina();
 
@@ -1254,10 +1928,17 @@ Promise.all([
     error
   );
 
+
   loading.innerHTML=
+
     '<span class="error">'+
+
     'No se pudo cargar la cartografía.<br>'+
-    'Error: '+error.message+
+
+    'Error: '+
+
+    error.message+
+
     '</span>';
 
 });
