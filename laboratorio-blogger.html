@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>NubiTube MAP · Laboratorio Blogger</title>
+
+<style>
+*{box-sizing:border-box}
+
+body{
+  margin:0;
+  background:#071a33;
+  color:#eaf6ff;
+  font-family:Arial,sans-serif;
+}
+
+main{
+  width:min(1100px,94%);
+  margin:35px auto;
+}
+
+h1{
+  margin-bottom:6px;
+}
+
+.sub{
+  color:#9fc9eb;
+  margin-bottom:25px;
+}
+
+.status{
+  padding:14px;
+  margin:15px 0;
+  border:1px solid #17618a;
+  border-radius:10px;
+  background:#0a2544;
+}
+
+.ok{color:#69f0ae}
+.error{color:#ff8a80}
+
+.grid{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:18px;
+}
+
+.panel{
+  border:1px solid #17618a;
+  border-radius:14px;
+  overflow:hidden;
+  background:#091f3b;
+}
+
+.panel h2{
+  margin:0;
+  padding:16px;
+  background:#0d2b4d;
+}
+
+.summary{
+  padding:12px 16px;
+  color:#9fc9eb;
+  border-bottom:1px solid #17618a;
+}
+
+.item{
+  padding:14px 16px;
+  border-bottom:1px solid #173d5d;
+}
+
+.item:last-child{
+  border-bottom:0;
+}
+
+.title{
+  font-weight:700;
+  margin-bottom:7px;
+}
+
+.labels{
+  font-size:13px;
+  color:#9fc9eb;
+  line-height:1.6;
+}
+
+.url{
+  display:block;
+  margin-top:7px;
+  color:#35d4ff;
+  font-size:12px;
+  overflow-wrap:anywhere;
+}
+
+@media(max-width:760px){
+  main{
+    width:94%;
+    margin:20px auto;
+  }
+
+  .grid{
+    grid-template-columns:1fr;
+  }
+}
+</style>
+</head>
+
+<body>
+
+<main>
+
+<h1>🔬 NubiTube MAP · Laboratorio Blogger</h1>
+
+<div class="sub">
+Prueba aislada de feeds públicos. No modifica NubiTube MAP.
+</div>
+
+<div id="globalStatus" class="status">
+⏳ Consultando Blogger...
+</div>
+
+<div class="grid">
+
+<section class="panel">
+<h2>📻 Radios en Vivo</h2>
+<div id="radioSummary" class="summary">Esperando...</div>
+<div id="radioResults"></div>
+</section>
+
+<section class="panel">
+<h2>📺 TV en Vivo</h2>
+<div id="tvSummary" class="summary">Esperando...</div>
+<div id="tvResults"></div>
+</section>
+
+</div>
+
+</main>
+
+<script>
+(function(){
+
+"use strict";
+
+var BLOG =
+  "https://www.nubitube.com";
+
+var PAGE_SIZE = 50;
+
+var MAX_PAGES = 20;
+
+var TIMEOUT = 10000;
+
+
+/* =========================
+   JSONP
+========================= */
+
+function jsonp(url){
+
+  return new Promise(function(resolve,reject){
+
+    var callback =
+      "ntMapLab_" +
+      Date.now() + "_" +
+      Math.floor(Math.random()*1000000);
+
+    var script =
+      document.createElement("script");
+
+    var finished=false;
+
+    function clean(){
+
+      if(script.parentNode){
+        script.parentNode.removeChild(script);
+      }
+
+      try{
+        delete window[callback];
+      }catch(e){
+        window[callback]=undefined;
+      }
+    }
+
+    var timer=setTimeout(function(){
+
+      if(finished)return;
+
+      finished=true;
+      clean();
+
+      reject(
+        new Error("Timeout consultando Blogger")
+      );
+
+    },TIMEOUT);
+
+
+    window[callback]=function(data){
+
+      if(finished)return;
+
+      finished=true;
+
+      clearTimeout(timer);
+      clean();
+
+      resolve(data);
+    };
+
+
+    script.onerror=function(){
+
+      if(finished)return;
+
+      finished=true;
+
+      clearTimeout(timer);
+      clean();
+
+      reject(
+        new Error("Blogger no respondió al JSONP")
+      );
+    };
+
+
+    script.src =
+      url +
+      (url.indexOf("?")>-1 ? "&" : "?") +
+      "alt=json-in-script" +
+      "&callback=" +
+      encodeURIComponent(callback) +
+      "&_=" +
+      Date.now();
+
+    document.body.appendChild(script);
+
+  });
+
+}
+
+
+/* =========================
+   NORMALIZACIÓN
+========================= */
+
+function entryTitle(entry){
+
+  return entry &&
+         entry.title &&
+         entry.title.$t
+    ? entry.title.$t.trim()
+    : "(sin título)";
+}
+
+
+function entryLabels(entry){
+
+  var categories =
+    entry && entry.category
+      ? entry.category
+      : [];
+
+  return categories
+    .map(function(c){
+      return c.term || "";
+    })
+    .filter(Boolean);
+}
+
+
+function entryUrl(entry){
+
+  var links =
+    entry && entry.link
+      ? entry.link
+      : [];
+
+  for(var i=0;i<links.length;i++){
+
+    if(links[i].rel==="alternate"){
+      return links[i].href || "";
+    }
+  }
+
+  return "";
+}
+
+
+/* =========================
+   PAGINACIÓN
+========================= */
+
+async function loadLabel(label){
+
+  var all=[];
+  var requests=0;
+  var page=0;
+
+  while(page<MAX_PAGES){
+
+    var startIndex =
+      page * PAGE_SIZE + 1;
+
+    var url =
+      BLOG +
+      "/feeds/posts/default/-/" +
+      encodeURIComponent(label) +
+      "?orderby=published" +
+      "&max-results=" +
+      PAGE_SIZE +
+      "&start-index=" +
+      startIndex;
+
+    requests++;
+
+    var data=await jsonp(url);
+
+    var entries =
+      data &&
+      data.feed &&
+      data.feed.entry
+        ? data.feed.entry
+        : [];
+
+    all=all.concat(entries);
+
+    /*
+     Si Blogger devuelve menos de PAGE_SIZE,
+     llegamos a la última página.
+    */
+    if(entries.length<PAGE_SIZE){
+      break;
+    }
+
+    page++;
+  }
+
+  return {
+    label:label,
+    entries:all,
+    requests:requests,
+    hitSafetyLimit:page>=MAX_PAGES
+  };
+}
+
+
+/* =========================
+   PINTAR RESULTADOS
+========================= */
+
+function render(result,summaryId,resultsId){
+
+  var summary=
+    document.getElementById(summaryId);
+
+  var box=
+    document.getElementById(resultsId);
+
+  summary.innerHTML =
+    "<strong>" +
+    result.entries.length +
+    "</strong> entradas · " +
+    "<strong>" +
+    result.requests +
+    "</strong> consulta(s)" +
+    (
+      result.hitSafetyLimit
+        ? " · ⚠️ límite de seguridad alcanzado"
+        : ""
+    );
+
+  box.innerHTML="";
+
+  if(!result.entries.length){
+
+    box.innerHTML =
+      '<div class="item">Sin entradas recibidas.</div>';
+
+    return;
+  }
+
+  result.entries.forEach(function(entry){
+
+    var title=entryTitle(entry);
+    var labels=entryLabels(entry);
+    var url=entryUrl(entry);
+
+    var item=
+      document.createElement("div");
+
+    item.className="item";
+
+
+    var titleEl=
+      document.createElement("div");
+
+    titleEl.className="title";
+    titleEl.textContent=title;
+
+    item.appendChild(titleEl);
+
+
+    var labelsEl=
+      document.createElement("div");
+
+    labelsEl.className="labels";
+
+    labelsEl.textContent =
+      labels.length
+        ? "Etiquetas: " + labels.join(" · ")
+        : "Etiquetas: ninguna";
+
+    item.appendChild(labelsEl);
+
+
+    if(url){
+
+      var link=
+        document.createElement("a");
+
+      link.className="url";
+      link.href=url;
+      link.target="_blank";
+      link.rel="noopener";
+      link.textContent=url;
+
+      item.appendChild(link);
+    }
+
+
+    box.appendChild(item);
+
+  });
+
+}
+
+
+/* =========================
+   PRUEBA
+========================= */
+
+async function run(){
+
+  var status=
+    document.getElementById("globalStatus");
+
+  try{
+
+    /*
+     Dos familias de contenido.
+     Se consultan una sola vez cada una
+     y luego todo podrá filtrarse localmente.
+    */
+
+    var results=
+      await Promise.all([
+
+        loadLabel("Radios en Vivo"),
+
+        loadLabel("TV en Vivo")
+
+      ]);
+
+
+    render(
+      results[0],
+      "radioSummary",
+      "radioResults"
+    );
+
+    render(
+      results[1],
+      "tvSummary",
+      "tvResults"
+    );
+
+
+    var totalRequests =
+      results[0].requests +
+      results[1].requests;
+
+    var totalEntries =
+      results[0].entries.length +
+      results[1].entries.length;
+
+
+    status.className="status ok";
+
+    status.innerHTML =
+      "✅ Blogger respondió. " +
+      "<strong>" +
+      totalEntries +
+      "</strong> medios recibidos mediante " +
+      "<strong>" +
+      totalRequests +
+      "</strong> consulta(s).";
+
+  }catch(error){
+
+    status.className="status error";
+
+    status.textContent =
+      "❌ ERROR: " +
+      error.message;
+
+  }
+
+}
+
+run();
+
+})();
+</script>
+
+</body>
+</html>
