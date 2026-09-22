@@ -515,6 +515,9 @@ const DEPARTAMENTOS_URL=
 const LOCALIDADES_URL=
   "./data/localidad_bahra.geojson";
 
+const PARAJES_URL=
+  "./data/bahra_paraje.geojson";
+
 
 /* =========================
    ELEMENTOS
@@ -558,6 +561,7 @@ const localityList=
 let provincias=null;
 let departamentos=null;
 let localidades=null;
+let parajes=null;
 
 let currentLevel="country";
 
@@ -1311,7 +1315,7 @@ function showProvince(
 
 
   info.textContent=
-    "Seleccioná un departamento para explorar sus localidades.";
+    "Seleccioná un departamento para explorar sus lugares.";
 
 
   context.textContent=
@@ -1358,81 +1362,94 @@ function showProvince(
 
 
 /* =========================
-   LOCALIDADES BAHRA
+   LUGARES BAHRA
 ========================= */
 
-function departmentLocalities(
+function departmentPlaces(
   departmentFeature
 ){
 
-  /*
-    departamentos.geojson:
-    id = código oficial del departamento
-
-    localidad_bahra.geojson:
-    cod_depto = código oficial del departamento
-  */
-
   const depId=
     String(
-
       prop(
         departmentFeature,
         ["id","in1"]
       )
-
     ).trim();
-
 
   const provinceId=
     String(
       currentProvince.id
     ).trim();
 
+  function belongsToDepartment(feature){
 
-  return localidades.features
-    .filter(function(feature){
+    const p=
+      feature.properties || {};
 
-      const p=
-        feature.properties || {};
+    const placeDepartment=
+      String(p.cod_depto || "").trim();
 
+    const placeProvince=
+      String(p.cod_pcia || "").trim();
 
-      const localityDepartment=
-        String(
-          p.cod_depto || ""
-        ).trim();
+    return (
+      placeDepartment===depId &&
+      (
+        !placeProvince ||
+        placeProvince===provinceId
+      )
+    );
+  }
 
+  const localities=
+    ((localidades && localidades.features) || [])
+      .filter(belongsToDepartment);
 
-      const localityProvince=
-        String(
-          p.cod_pcia || ""
-        ).trim();
+  const hamlets=
+    ((parajes && parajes.features) || [])
+      .filter(belongsToDepartment);
 
+  const merged=
+    localities.concat(hamlets);
 
-      /*
-        La coincidencia principal
-        es por código de departamento.
+  const seen=
+    new Set();
 
-        También verificamos provincia
-        si BAHRA trae cod_pcia.
-      */
+  return merged.filter(function(feature){
 
-      const sameDepartment=
-        localityDepartment===depId;
+    const name=
+      normalizeText(featureName(feature));
 
+    const coords=
+      (
+        feature.geometry &&
+        feature.geometry.type==="Point" &&
+        Array.isArray(feature.geometry.coordinates)
+      )
+      ? feature.geometry.coordinates
+      : [];
 
-      const sameProvince=
-        !localityProvince ||
-        localityProvince===provinceId;
+    const lon=
+      coords.length>=2
+        ? Number(coords[0]).toFixed(4)
+        : "";
 
+    const lat=
+      coords.length>=2
+        ? Number(coords[1]).toFixed(4)
+        : "";
 
-      return (
-        sameDepartment &&
-        sameProvince
-      );
+    const key=
+      depId+"|"+name+"|"+lon+"|"+lat;
 
-    });
+    if(seen.has(key)){
+      return false;
+    }
 
+    seen.add(key);
+    return true;
+  });
 }
 
 
@@ -1480,8 +1497,8 @@ function showDepartment(
     "🔎 Buscar Radio, TV o Lugar...";
 
 
-  const localities=
-    departmentLocalities(
+  const places=
+    departmentPlaces(
       departmentFeature
     );
 
@@ -1491,7 +1508,7 @@ function showDepartment(
 
 
   info.textContent=
-    "Seleccioná una localidad para explorar sus radios y canales de TV.";
+    "Seleccioná un lugar para explorar sus radios y canales de TV.";
 
 
   context.textContent=
@@ -1500,11 +1517,11 @@ function showDepartment(
 
 
   tag.textContent=
-    localities.length+
+    places.length+
     (
-      localities.length===1
-        ? " localidad"
-        : " localidades"
+      places.length===1
+        ? " lugar"
+        : " lugares"
     );
 
 
@@ -1536,7 +1553,7 @@ function showDepartment(
 
 
 /* =========================
-   PUNTOS DE LOCALIDAD
+   PUNTOS DE LUGARES
 ========================= */
 
 function drawLocalities(
@@ -1658,7 +1675,7 @@ function drawLocalities(
 
 
 /* =========================
-   LISTA LOCALIDADES
+   LISTA DE LUGARES
 ========================= */
 
 function renderLocalityList(
@@ -1765,7 +1782,7 @@ function renderLocalityList(
 
 
 /* =========================
-   SELECCIONAR LOCALIDAD
+   SELECCIONAR LUGAR
 ========================= */
 
 function selectLocality(
@@ -1840,7 +1857,7 @@ function selectLocality(
 
 
   info.textContent=
-    "Localidad seleccionada. Aquí conectaremos automáticamente sus radios y canales de TV publicados en NubiTube.";
+    "Lugar seleccionado. Aquí conectaremos automáticamente sus radios y canales de TV publicados en NubiTube.";
 
 
   context.textContent=
@@ -1849,7 +1866,7 @@ function selectLocality(
 
 
   tag.textContent=
-    "Localidad seleccionada";
+    "Lugar seleccionado";
 
 }
 
@@ -1999,6 +2016,25 @@ Promise.all([
 
     return response.json();
 
+  }),
+
+  fetch(
+    PARAJES_URL,
+    {cache:"no-store"}
+  )
+  .then(function(response){
+
+    if(!response.ok){
+
+      throw new Error(
+        "Parajes HTTP "+
+        response.status
+      );
+
+    }
+
+    return response.json();
+
   })
 
 ])
@@ -2013,6 +2049,9 @@ Promise.all([
 
   localidades=
     data[2];
+
+  parajes=
+    data[3];
 
 
   loading.classList.add(
