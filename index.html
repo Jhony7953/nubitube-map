@@ -599,13 +599,13 @@ svg{
       </span>
 
       <div
-        id="localityList"
-        class="locality-list">
+        id="mediaList"
+        class="media-list">
       </div>
 
       <div
-        id="mediaList"
-        class="media-list">
+        id="localityList"
+        class="locality-list">
       </div>
 
     </aside>
@@ -1403,22 +1403,23 @@ function refreshVisibleMedia(){
 
   if(currentLevel==="country"){
     setMediaContext(mediaCatalog,"Argentina");
+    clearMediaList();
     return;
   }
 
   if(currentLevel==="province" && currentProvince){
-    setMediaContext(
-      mediaForProvinceFeature(currentProvince.feature),
-      currentProvince.name
-    );
+    const items=
+      mediaForProvinceFeature(currentProvince.feature);
+    setMediaContext(items,currentProvince.name);
+    renderMediaList(items,currentProvince.name);
     return;
   }
 
   if(currentLevel==="department" && currentDepartment){
-    setMediaContext(
-      mediaForDepartmentFeature(currentDepartment.feature),
-      currentDepartment.name
-    );
+    const items=
+      mediaForDepartmentFeature(currentDepartment.feature);
+    setMediaContext(items,currentDepartment.name);
+    renderMediaList(items,currentDepartment.name);
   }
 }
 
@@ -1625,6 +1626,13 @@ function showProvince(
 
   );
 
+  if(mediaCatalog.length){
+    renderMediaList(
+      mediaForProvinceFeature(provinceFeature),
+      provinceName
+    );
+  }
+
 }
 
 
@@ -1824,6 +1832,13 @@ function showDepartment(
   renderLocalityList(
     places
   );
+
+  if(mediaCatalog.length){
+    renderMediaList(
+      mediaForDepartmentFeature(departmentFeature),
+      departmentName
+    );
+  }
 
 }
 
@@ -2298,10 +2313,15 @@ function openSearchResult(item){
 
   if(item.type==="media"){
 
-    if(item.province && item.department && item.place){
+    if(item.province){
       showProvince(item.province);
-      showDepartment(item.department);
+    }
 
+    if(item.department){
+      showDepartment(item.department);
+    }
+
+    if(item.place){
       const normalized=
         normalizeText(featureName(item.place));
 
@@ -2314,10 +2334,20 @@ function openSearchResult(item){
         item.place,
         circle || null
       );
-
-      search.value=item.name;
+    }else if(item.department){
+      renderMediaList(
+        mediaForDepartmentFeature(item.department),
+        featureName(item.department)
+      );
+    }else if(item.province){
+      renderMediaList(
+        mediaForProvinceFeature(item.province),
+        featureName(item.province)
+      );
     }
 
+    search.value=item.name;
+    closeSearchResults();
     return;
   }
 
@@ -2637,11 +2667,30 @@ function territoryFromLabels(labels){
 
   let matchedProvinceItem=null;
 
-  for(let i=0;i<provinceItems.length;i++){
+  /* "Ciudad de Buenos Aires" es más específica que "Buenos Aires". */
+  if(
+    normalizedLabels.indexOf(
+      normalizeText("Ciudad de Buenos Aires")
+    )!==-1
+  ){
+    matchedProvinceItem=
+      provinceItems.find(function(item){
+        const n=normalizeText(item.name);
+        return (
+          n==="ciudad autonoma de buenos aires" ||
+          n==="ciudad de buenos aires" ||
+          n==="caba"
+        );
+      }) || null;
+  }
 
-    if(hasLabel(provinceItems[i].name)){
-      matchedProvinceItem=provinceItems[i];
-      break;
+  if(!matchedProvinceItem){
+    for(let i=0;i<provinceItems.length;i++){
+
+      if(hasLabel(provinceItems[i].name)){
+        matchedProvinceItem=provinceItems[i];
+        break;
+      }
     }
   }
 
