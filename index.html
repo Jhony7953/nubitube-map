@@ -2608,49 +2608,144 @@ async function loadBloggerLabel(label,type){
 }
 
 function territoryFromLabels(labels){
-  const set=new Set(labels.map(normalizeText));
-  const has=function(name){return set.has(normalizeText(name));};
 
-  const placeItems=searchIndex.filter(function(x){return x.type==="place";});
+  const normalizedLabels=
+    labels.map(normalizeText);
+
+  function hasLabel(name){
+    return normalizedLabels.indexOf(
+      normalizeText(name)
+    )!==-1;
+  }
+
+  /*
+    RESOLUCIÓN TERRITORIAL JERÁRQUICA B.1
+
+    1) Primero Provincia.
+    2) Luego Lugar, pero SOLO dentro de esa provincia.
+    3) Departamento se hereda del Lugar.
+    4) Si no hay Lugar, se intenta Departamento dentro
+       de la provincia ya resuelta.
+    5) Nunca se usa "Argentina", FM, Online, etc. como
+       atajo geográfico nacional.
+  */
+
+  const provinceItems=
+    searchIndex.filter(function(item){
+      return item.type==="province";
+    });
+
+  let matchedProvinceItem=null;
+
+  for(let i=0;i<provinceItems.length;i++){
+
+    if(hasLabel(provinceItems[i].name)){
+      matchedProvinceItem=provinceItems[i];
+      break;
+    }
+  }
+
+  /*
+    Sin provincia explícita no adivinamos un lugar
+    nacional por nombre: evitamos homónimos y falsos
+    positivos como Argentina → Aguirre → Santiago del Estero.
+  */
+  if(!matchedProvinceItem){
+    return {
+      place:null,
+      placeName:"",
+      department:null,
+      departmentName:"",
+      province:null,
+      provinceName:""
+    };
+  }
+
+  const province=
+    matchedProvinceItem.province;
+
+  const provinceId=
+    provinceIdOf(province);
+
+  /*
+    Buscamos lugares exclusivamente dentro
+    de la provincia ya confirmada.
+  */
+  const placeItems=
+    searchIndex.filter(function(item){
+
+      return (
+        item.type==="place" &&
+        item.province &&
+        provinceIdOf(item.province)===provinceId
+      );
+    });
+
   for(let i=0;i<placeItems.length;i++){
-    if(has(placeItems[i].name)){
+
+    const item=placeItems[i];
+
+    if(hasLabel(item.name)){
+
       return {
-        place:placeItems[i].place,
-        placeName:placeItems[i].name,
-        department:placeItems[i].department,
-        departmentName:featureName(placeItems[i].department),
-        province:placeItems[i].province,
-        provinceName:featureName(placeItems[i].province)
+        place:item.place,
+        placeName:item.name,
+        department:item.department,
+        departmentName:
+          featureName(item.department),
+        province:province,
+        provinceName:
+          featureName(province)
       };
     }
   }
 
-  const depItems=searchIndex.filter(function(x){return x.type==="department";});
-  for(let i=0;i<depItems.length;i++){
-    if(has(depItems[i].name)){
+  /*
+    Si no hubo lugar, intentamos departamento/partido,
+    también limitado a la provincia confirmada.
+  */
+  const departmentItems=
+    searchIndex.filter(function(item){
+
+      return (
+        item.type==="department" &&
+        item.province &&
+        provinceIdOf(item.province)===provinceId
+      );
+    });
+
+  for(let i=0;i<departmentItems.length;i++){
+
+    const item=departmentItems[i];
+
+    if(hasLabel(item.name)){
+
       return {
-        place:null,placeName:"",
-        department:depItems[i].department,
-        departmentName:depItems[i].name,
-        province:depItems[i].province,
-        provinceName:featureName(depItems[i].province)
+        place:null,
+        placeName:"",
+        department:item.department,
+        departmentName:item.name,
+        province:province,
+        provinceName:
+          featureName(province)
       };
     }
   }
 
-  const provItems=searchIndex.filter(function(x){return x.type==="province";});
-  for(let i=0;i<provItems.length;i++){
-    if(has(provItems[i].name)){
-      return {
-        place:null,placeName:"",
-        department:null,departmentName:"",
-        province:provItems[i].province,
-        provinceName:provItems[i].name
-      };
-    }
-  }
-
-  return {place:null,placeName:"",department:null,departmentName:"",province:null,provinceName:""};
+  /*
+    Como mínimo conservamos la provincia real.
+    Esto permite detectar editorialmente entradas
+    que aún no tengan un Lugar resoluble.
+  */
+  return {
+    place:null,
+    placeName:"",
+    department:null,
+    departmentName:"",
+    province:province,
+    provinceName:
+      featureName(province)
+  };
 }
 
 function normalizeMedia(entry,type){
@@ -2684,7 +2779,13 @@ async function loadMediaCatalog(){
     matchedPlace:mediaCatalog.filter(function(m){return !!m.territory.place;}).length,
     matchedDepartment:mediaCatalog.filter(function(m){return !!m.territory.department;}).length,
     matchedProvince:mediaCatalog.filter(function(m){return !!m.territory.province;}).length,
-    unmatched:mediaCatalog.filter(function(m){return !m.territory.province;}).length
+    unmatched:mediaCatalog.filter(function(m){return !m.territory.province;}).length,
+    provinceOnly:mediaCatalog.filter(function(m){
+      return !!m.territory.province && !m.territory.department;
+    }).length,
+    departmentOnly:mediaCatalog.filter(function(m){
+      return !!m.territory.department && !m.territory.place;
+    }).length
   };
 
   console.group("NubiTube MAP · Blogger Media · Cirugía A");
