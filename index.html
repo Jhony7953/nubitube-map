@@ -619,7 +619,7 @@ svg{
 
 "use strict";
 
-/* NubiTube MAP · Cirugía C.1 PERFORMANCE
+/* NubiTube MAP · Cirugía C.2 PERFORMANCE + AUTOHEIGHT
    Base funcional: B.4 aprobada 12/12
    Cambio: localidades/parajes bajo demanda */
 
@@ -3219,6 +3219,70 @@ Promise.all([
 
 
 })();
+
+/* =========================
+   C.2 · SENSOR DE ALTURA
+   Sólo integración con Blogger.
+   No modifica cartografía, búsqueda ni resolución territorial.
+========================= */
+(function(){
+  "use strict";
+
+  var lastHeight=0;
+  var timer=null;
+
+  function measure(){
+    var de=document.documentElement;
+    var b=document.body;
+
+    var h=Math.max(
+      de ? de.scrollHeight : 0,
+      de ? de.offsetHeight : 0,
+      b ? b.scrollHeight : 0,
+      b ? b.offsetHeight : 0
+    );
+
+    if(!h || Math.abs(h-lastHeight)<2) return;
+    lastHeight=h;
+
+    try{
+      window.parent.postMessage({
+        type:"NUBITUBE_MAP_HEIGHT",
+        height:h
+      },"https://www.nubitube.com");
+    }catch(e){}
+  }
+
+  function schedule(){
+    clearTimeout(timer);
+    timer=setTimeout(measure,40);
+  }
+
+  window.addEventListener("load",schedule,{once:true});
+  window.addEventListener("resize",schedule,{passive:true});
+
+  if("ResizeObserver" in window){
+    var ro=new ResizeObserver(schedule);
+    ro.observe(document.documentElement);
+    if(document.body) ro.observe(document.body);
+  }else{
+    setInterval(measure,1000);
+  }
+
+  /* Cambios de navegación/listados dentro del MAP */
+  document.addEventListener("click",function(){
+    setTimeout(measure,0);
+    setTimeout(measure,120);
+    setTimeout(measure,350);
+  },true);
+
+  document.addEventListener("input",function(){
+    setTimeout(measure,120);
+  },true);
+
+  measure();
+})();
+
 </script>
 
 </body>
