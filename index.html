@@ -619,6 +619,10 @@ svg{
 
 "use strict";
 
+/* NubiTube MAP · Cirugía C.1 PERFORMANCE
+   Base funcional: B.4 aprobada 12/12
+   Cambio: localidades/parajes bajo demanda */
+
 /* =========================
    ARCHIVOS
 ========================= */
@@ -705,6 +709,10 @@ let searchTimer=null;
 
 let mediaCatalog=[];
 let mediaLoadReport=null;
+
+/* C.1 · Cartografía pesada bajo demanda */
+let placeDataPromise=null;
+let placeDataReady=false;
 
 
 /* =========================
@@ -1500,6 +1508,12 @@ function showArgentina(){
 function showProvince(
   provinceFeature
 ){
+
+  /*
+    C.1: recién ahora pedimos localidades/parajes.
+    La navegación provincial no espera la descarga.
+  */
+  ensurePlaceData().catch(function(){});
 
   const provinceName=
     featureName(
@@ -2516,9 +2530,29 @@ search.addEventListener(
 
     searchTimer=setTimeout(
       function(){
-        renderSearchResults(search.value);
+
+        const query=search.value;
+
+        if(!query.trim()){
+          renderSearchResults(query);
+          return;
+        }
+
+        ensurePlaceData()
+          .then(function(){
+            renderSearchResults(query);
+          })
+          .catch(function(){
+            /*
+              Aun si falla la cartografía pesada,
+              provincias/departamentos/medios
+              siguen siendo buscables.
+            */
+            renderSearchResults(query);
+          });
+
       },
-      70
+      120
     );
   }
 );
@@ -2997,6 +3031,106 @@ async function loadMediaCatalog(){
 }
 
 /* =========================
+   C.1 · CARGA DIFERIDA DE LUGARES
+   Localidades + parajes NO se descargan al abrir MAP.
+   Se cargan sólo cuando el visitante explora una
+   provincia o escribe en el buscador.
+========================= */
+
+function ensurePlaceData(){
+
+  if(placeDataReady){
+    return Promise.resolve();
+  }
+
+  if(placeDataPromise){
+    return placeDataPromise;
+  }
+
+  placeDataPromise=Promise.all([
+
+    fetch(
+      LOCALIDADES_URL,
+      {cache:"force-cache"}
+    ).then(function(response){
+      if(!response.ok){
+        throw new Error(
+          "Localidades HTTP "+response.status
+        );
+      }
+      return response.json();
+    }),
+
+    fetch(
+      PARAJES_URL,
+      {cache:"force-cache"}
+    ).then(function(response){
+      if(!response.ok){
+        throw new Error(
+          "Parajes HTTP "+response.status
+        );
+      }
+      return response.json();
+    })
+
+  ]).then(function(data){
+
+    localidades=data[0];
+    parajes=data[1];
+    placeDataReady=true;
+
+    /*
+      Reconstruimos el índice una sola vez con los
+      ~14.000 lugares y recalculamos los 12 medios.
+    */
+    buildSearchIndex();
+
+    return loadMediaCatalog()
+      .catch(function(error){
+        console.warn(
+          "NubiTube MAP · Blogger:",
+          error
+        );
+      })
+      .then(function(){
+
+        /*
+          Si el usuario ya entró a un departamento,
+          lo redibujamos ahora con sus lugares.
+        */
+        if(
+          currentLevel==="department" &&
+          currentDepartment &&
+          currentDepartment.feature
+        ){
+          showDepartment(
+            currentDepartment.feature
+          );
+        }else{
+          refreshVisibleMedia();
+        }
+      });
+
+  }).catch(function(error){
+
+    /*
+      Permite reintentar en una interacción futura.
+    */
+    placeDataPromise=null;
+
+    console.warn(
+      "NubiTube MAP · lugares:",
+      error
+    );
+
+    throw error;
+  });
+
+  return placeDataPromise;
+}
+
+
+/* =========================
    CARGA
 ========================= */
 
@@ -3004,113 +3138,69 @@ Promise.all([
 
   fetch(
     PROVINCIAS_URL,
-    {cache:"no-store"}
+    {cache:"force-cache"}
   )
   .then(function(response){
 
     if(!response.ok){
-
       throw new Error(
         "Provincias HTTP "+
         response.status
       );
-
     }
 
     return response.json();
-
   }),
-
 
   fetch(
     DEPARTAMENTOS_URL,
-    {cache:"no-store"}
+    {cache:"force-cache"}
   )
   .then(function(response){
 
     if(!response.ok){
-
       throw new Error(
         "Departamentos HTTP "+
         response.status
       );
-
     }
 
     return response.json();
-
-  }),
-
-
-  fetch(
-    LOCALIDADES_URL,
-    {cache:"no-store"}
-  )
-  .then(function(response){
-
-    if(!response.ok){
-
-      throw new Error(
-        "Localidades HTTP "+
-        response.status
-      );
-
-    }
-
-    return response.json();
-
-  }),
-
-  fetch(
-    PARAJES_URL,
-    {cache:"no-store"}
-  )
-  .then(function(response){
-
-    if(!response.ok){
-
-      throw new Error(
-        "Parajes HTTP "+
-        response.status
-      );
-
-    }
-
-    return response.json();
-
   })
 
 ])
 
 .then(function(data){
 
-  provincias=
-    data[0];
+  provincias=data[0];
+  departamentos=data[1];
 
-  departamentos=
-    data[1];
-
-  localidades=
-    data[2];
-
-  parajes=
-    data[3];
-
+  /*
+    C.1: inicio liviano.
+    Localidades/parajes permanecen sin cargar.
+  */
+  localidades=null;
+  parajes=null;
 
   loading.classList.add(
     "hidden"
   );
 
-
   buildSearchIndex();
-
-
   showArgentina();
 
-
   loadMediaCatalog().catch(function(error){
-    console.warn("NubiTube MAP · Blogger:",error);
-    mediaLoadReport={total:0,radios:0,tv:0,requests:0,error:error.message};
+    console.warn(
+      "NubiTube MAP · Blogger:",
+      error
+    );
+    mediaLoadReport={
+      total:0,
+      radios:0,
+      tv:0,
+      requests:0,
+      error:error.message
+    };
   });
 
 })
@@ -3122,20 +3212,11 @@ Promise.all([
     error
   );
 
-
-  loading.innerHTML=
-
-    '<span class="error">'+
-
-    'No se pudo cargar la cartografía.<br>'+
-
-    'Error: '+
-
-    error.message+
-
-    '</span>';
+  loading.textContent=
+    "No pudimos cargar el mapa.";
 
 });
+
 
 })();
 </script>
