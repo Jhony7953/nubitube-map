@@ -2649,15 +2649,17 @@ function territoryFromLabels(labels){
   }
 
   /*
-    RESOLUCIÓN TERRITORIAL JERÁRQUICA B.1
+    B.4 · RESOLUCIÓN EDITORIAL TERRITORIAL
 
-    1) Primero Provincia.
-    2) Luego Lugar, pero SOLO dentro de esa provincia.
-    3) Departamento se hereda del Lugar.
-    4) Si no hay Lugar, se intenta Departamento dentro
-       de la provincia ya resuelta.
-    5) Nunca se usa "Argentina", FM, Online, etc. como
-       atajo geográfico nacional.
+    Blogger manda editorialmente.
+    La cartografía traduce/geoposiciona.
+
+    Orden:
+    1) Alias territoriales editoriales inequívocos.
+    2) Provincia.
+    3) Lugar dentro de esa provincia.
+    4) Departamento heredado del Lugar.
+    5) Departamento explícito como fallback.
   */
 
   const provinceItems=
@@ -2665,41 +2667,157 @@ function territoryFromLabels(labels){
       return item.type==="province";
     });
 
-  let matchedProvinceItem=null;
+  const placeItemsAll=
+    searchIndex.filter(function(item){
+      return item.type==="place";
+    });
 
-  /* "Ciudad de Buenos Aires" es más específica que "Buenos Aires". */
-  if(
-    normalizedLabels.indexOf(
-      normalizeText("Ciudad de Buenos Aires")
-    )!==-1
-  ){
-    matchedProvinceItem=
-      provinceItems.find(function(item){
-        const n=normalizeText(item.name);
-        return (
-          n==="ciudad autonoma de buenos aires" ||
-          n==="ciudad de buenos aires" ||
-          n==="caba"
-        );
-      }) || null;
+  const departmentItemsAll=
+    searchIndex.filter(function(item){
+      return item.type==="department";
+    });
+
+  function findProvinceByNames(names){
+
+    const wanted=
+      names.map(normalizeText);
+
+    return provinceItems.find(function(item){
+      return wanted.indexOf(
+        normalizeText(item.name)
+      )!==-1;
+    }) || null;
   }
 
-  if(!matchedProvinceItem){
-    for(let i=0;i<provinceItems.length;i++){
+  function resultFromPlace(item){
 
-      if(hasLabel(provinceItems[i].name)){
-        matchedProvinceItem=provinceItems[i];
-        break;
+    return {
+      place:item.place,
+      placeName:item.name,
+      department:item.department,
+      departmentName:
+        featureName(item.department),
+      province:item.province,
+      provinceName:
+        featureName(item.province)
+    };
+  }
+
+  /*
+    ALIAS EDITORIALES.
+    Son traducciones del vocabulario Blogger al
+    vocabulario cartográfico; NO dependen del título.
+  */
+
+  if(hasLabel("Corrientes Capital")){
+
+    const corrientesProvince=
+      findProvinceByNames([
+        "Corrientes"
+      ]);
+
+    if(corrientesProvince){
+
+      const pId=
+        provinceIdOf(
+          corrientesProvince.province
+        );
+
+      const corrientesCity=
+        placeItemsAll.find(function(item){
+
+          return (
+            item.province &&
+            provinceIdOf(item.province)===pId &&
+            normalizeText(item.name)==="corrientes" &&
+            item.department &&
+            normalizeText(
+              featureName(item.department)
+            )==="capital"
+          );
+        });
+
+      if(corrientesCity){
+        return resultFromPlace(
+          corrientesCity
+        );
       }
     }
   }
 
+  if(hasLabel("Ciudad de Buenos Aires")){
+
+    const caba=
+      findProvinceByNames([
+        "Ciudad Autónoma de Buenos Aires",
+        "Ciudad de Buenos Aires",
+        "CABA"
+      ]);
+
+    if(caba){
+
+      /*
+        CABA es jurisdicción suficiente para MAP.
+        Si BAHRA expone un Lugar equivalente, lo
+        aprovechamos; si no, conservamos CABA.
+      */
+      const cabaId=
+        provinceIdOf(caba.province);
+
+      const cabaPlace=
+        placeItemsAll.find(function(item){
+
+          if(
+            !item.province ||
+            provinceIdOf(item.province)!==cabaId
+          ){
+            return false;
+          }
+
+          const n=
+            normalizeText(item.name);
+
+          return (
+            n==="ciudad de buenos aires" ||
+            n==="buenos aires"
+          );
+        });
+
+      if(cabaPlace){
+        return resultFromPlace(
+          cabaPlace
+        );
+      }
+
+      return {
+        place:null,
+        placeName:"",
+        department:null,
+        departmentName:"",
+        province:caba.province,
+        provinceName:
+          featureName(caba.province)
+      };
+    }
+  }
+
   /*
-    Sin provincia explícita no adivinamos un lugar
-    nacional por nombre: evitamos homónimos y falsos
-    positivos como Argentina → Aguirre → Santiago del Estero.
+    PROVINCIA NORMAL.
   */
+
+  let matchedProvinceItem=null;
+
+  for(let i=0;i<provinceItems.length;i++){
+
+    if(hasLabel(provinceItems[i].name)){
+      matchedProvinceItem=
+        provinceItems[i];
+      break;
+    }
+  }
+
   if(!matchedProvinceItem){
+
     return {
       place:null,
       placeName:"",
@@ -2717,26 +2835,26 @@ function territoryFromLabels(labels){
     provinceIdOf(province);
 
   /*
-    Buscamos lugares exclusivamente dentro
-    de la provincia ya confirmada.
+    La etiqueta de provincia queda excluida
+    de niveles inferiores.
   */
-  const provinceNamesToIgnore=new Set([
-    normalizeText(featureName(province)),
-    normalizeText(matchedProvinceItem.name)
-  ]);
+  const provinceNamesToIgnore=
+    new Set([
+      normalizeText(
+        featureName(province)
+      ),
+      normalizeText(
+        matchedProvinceItem.name
+      )
+    ]);
 
   /*
-    REGLA GENERAL B.3:
-    una etiqueta usada para identificar la PROVINCIA
-    no puede reutilizarse como LUGAR.
-    "Corrientes" = provincia; luego buscamos Tatacua,
-    Mburucuya, Laguna Brava, etc. dentro de Corrientes.
+    LUGAR dentro de provincia.
   */
   const placeItems=
-    searchIndex.filter(function(item){
+    placeItemsAll.filter(function(item){
 
       return (
-        item.type==="place" &&
         item.province &&
         provinceIdOf(item.province)===provinceId &&
         !provinceNamesToIgnore.has(
@@ -2750,29 +2868,17 @@ function territoryFromLabels(labels){
     const item=placeItems[i];
 
     if(hasLabel(item.name)){
-
-      return {
-        place:item.place,
-        placeName:item.name,
-        department:item.department,
-        departmentName:
-          featureName(item.department),
-        province:province,
-        provinceName:
-          featureName(province)
-      };
+      return resultFromPlace(item);
     }
   }
 
   /*
-    Si no hubo lugar, intentamos departamento/partido,
-    también limitado a la provincia confirmada.
+    DEPARTAMENTO/PARTIDO fallback.
   */
   const departmentItems=
-    searchIndex.filter(function(item){
+    departmentItemsAll.filter(function(item){
 
       return (
-        item.type==="department" &&
         item.province &&
         provinceIdOf(item.province)===provinceId
       );
@@ -2801,11 +2907,6 @@ function territoryFromLabels(labels){
     }
   }
 
-  /*
-    Como mínimo conservamos la provincia real.
-    Esto permite detectar editorialmente entradas
-    que aún no tengan un Lugar resoluble.
-  */
   return {
     place:null,
     placeName:"",
@@ -2868,6 +2969,25 @@ async function loadMediaCatalog(){
     };
   }));
   console.log("Reporte:",mediaLoadReport);
+
+  const editorialAudit=
+    mediaCatalog.map(function(m){
+
+      return {
+        medio:m.title,
+        lugar:m.territory.placeName || "—",
+        departamento:
+          m.territory.departmentName || "—",
+        provincia:
+          m.territory.provinceName || "—"
+      };
+    });
+
+  console.log(
+    "Auditoría territorial B.4:",
+    editorialAudit
+  );
+
   console.groupEnd();
 
   addMediaToSearchIndex();
