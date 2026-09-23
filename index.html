@@ -2720,13 +2720,28 @@ function territoryFromLabels(labels){
     Buscamos lugares exclusivamente dentro
     de la provincia ya confirmada.
   */
+  const provinceNamesToIgnore=new Set([
+    normalizeText(featureName(province)),
+    normalizeText(matchedProvinceItem.name)
+  ]);
+
+  /*
+    REGLA GENERAL B.3:
+    una etiqueta usada para identificar la PROVINCIA
+    no puede reutilizarse como LUGAR.
+    "Corrientes" = provincia; luego buscamos Tatacua,
+    Mburucuya, Laguna Brava, etc. dentro de Corrientes.
+  */
   const placeItems=
     searchIndex.filter(function(item){
 
       return (
         item.type==="place" &&
         item.province &&
-        provinceIdOf(item.province)===provinceId
+        provinceIdOf(item.province)===provinceId &&
+        !provinceNamesToIgnore.has(
+          normalizeText(item.name)
+        )
       );
     });
 
@@ -2767,7 +2782,12 @@ function territoryFromLabels(labels){
 
     const item=departmentItems[i];
 
-    if(hasLabel(item.name)){
+    if(
+      !provinceNamesToIgnore.has(
+        normalizeText(item.name)
+      ) &&
+      hasLabel(item.name)
+    ){
 
       return {
         place:null,
