@@ -25,6 +25,11 @@ body{
   max-width:1200px;
   margin:auto;
   padding:20px;
+  visibility:hidden;
+}
+
+#app.nt-ready{
+  visibility:visible;
 }
 
 .header{
@@ -614,7 +619,7 @@ svg{
 
 "use strict";
 
-/* NubiTube MAP · Cirugía C.2.1 PERFORMANCE + AUTOHEIGHT + CLEAN HEADER
+/* NubiTube MAP · Cirugía C.2.2 PERFORMANCE + AUTOHEIGHT + CLEAN HEADER + ANTI-FLASH
    Base funcional: B.4 aprobada 12/12
    Cambio: localidades/parajes bajo demanda */
 
@@ -3177,12 +3182,17 @@ Promise.all([
   localidades=null;
   parajes=null;
 
+  buildSearchIndex();
+  showArgentina();
+
+  /* C.2.2 · Anti-flash:
+     revelamos la interfaz sólo después del primer render válido. */
   loading.classList.add(
     "hidden"
   );
 
-  buildSearchIndex();
-  showArgentina();
+  document.getElementById("app")
+    .classList.add("nt-ready");
 
   loadMediaCatalog().catch(function(error){
     console.warn(
@@ -3209,6 +3219,9 @@ Promise.all([
 
   loading.textContent=
     "No pudimos cargar el mapa.";
+
+  document.getElementById("app")
+    .classList.add("nt-ready");
 
 });
 
